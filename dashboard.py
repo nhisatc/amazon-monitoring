@@ -257,52 +257,75 @@ with tab1:
 
         st.divider()
 
-        # Daily Trend
-        st.markdown("**Daily Sales Trend**")
-        daily_sales = sales_df.groupby('date').agg({
-            'units': 'sum',
-            'revenue': 'sum'
-        }).reset_index()
+        # Daily Trend by ASIN
+        st.markdown("**Daily Sales Trend by ASIN**")
+
+        # Get data grouped by date and ASIN
+        daily_by_asin = sales_df.groupby(['date', 'asin'])['units'].sum().reset_index()
 
         fig_trend = go.Figure()
 
-        fig_trend.add_trace(go.Scatter(
-            x=daily_sales['date'],
-            y=daily_sales['units'],
-            mode='lines+markers',
-            name='Units Sold',
-            line=dict(color='#1f77b4', width=2),
-            marker=dict(size=6)
-        ))
+        # Add a line for each ASIN
+        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+        for i, asin in enumerate(sorted(daily_by_asin['asin'].unique())):
+            asin_data = daily_by_asin[daily_by_asin['asin'] == asin]
+            fig_trend.add_trace(go.Scatter(
+                x=asin_data['date'],
+                y=asin_data['units'],
+                mode='lines+markers',
+                name=asin,
+                line=dict(color=colors[i % len(colors)], width=2),
+                marker=dict(size=5)
+            ))
 
         fig_trend.update_layout(
-            title="Daily Unit Sales",
+            title="Daily Unit Sales by ASIN",
             xaxis_title="Date",
             yaxis_title="Units",
             hovermode='x unified',
-            height=400
+            height=400,
+            legend=dict(
+                orientation="v",
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=1.01
+            )
         )
         st.plotly_chart(fig_trend, use_container_width=True)
 
-        # Revenue Trend
+        # Revenue Trend by ASIN
+        st.markdown("**Daily Revenue Trend by ASIN**")
+
+        daily_revenue_by_asin = sales_df.groupby(['date', 'asin'])['revenue'].sum().reset_index()
+
         fig_revenue = go.Figure()
 
-        fig_revenue.add_trace(go.Scatter(
-            x=daily_sales['date'],
-            y=daily_sales['revenue'],
-            mode='lines+markers',
-            name='Revenue',
-            fill='tozeroy',
-            line=dict(color='#2ca02c', width=2),
-            marker=dict(size=6)
-        ))
+        # Add a line for each ASIN
+        for i, asin in enumerate(sorted(daily_revenue_by_asin['asin'].unique())):
+            asin_data = daily_revenue_by_asin[daily_revenue_by_asin['asin'] == asin]
+            fig_revenue.add_trace(go.Scatter(
+                x=asin_data['date'],
+                y=asin_data['revenue'],
+                mode='lines+markers',
+                name=asin,
+                line=dict(color=colors[i % len(colors)], width=2),
+                marker=dict(size=5)
+            ))
 
         fig_revenue.update_layout(
-            title="Daily Revenue",
+            title="Daily Revenue by ASIN",
             xaxis_title="Date",
             yaxis_title="Revenue ($)",
             hovermode='x unified',
-            height=400
+            height=400,
+            legend=dict(
+                orientation="v",
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=1.01
+            )
         )
         st.plotly_chart(fig_revenue, use_container_width=True)
 
