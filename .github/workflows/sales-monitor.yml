@@ -2,8 +2,9 @@ name: Daily Sales Monitor
 
 on:
   schedule:
-    # Run at 1 PM UTC (adjust time as needed)
-    - cron: '0 13 * * *'
+    # Run at midnight EST (5am UTC) and 1 PM UTC
+    - cron: '0 5 * * *'    # Midnight EST / 5am UTC
+    - cron: '0 13 * * *'   # 1 PM UTC / 8am EDT / 7am EST
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
