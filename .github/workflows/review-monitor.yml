@@ -2,7 +2,6 @@ name: Review Monitor (Every 2 Hours)
 
 permissions:
   contents: write
-  metadata: read
 
 on:
   schedule:
