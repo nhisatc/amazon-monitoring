@@ -1,0 +1,45 @@
+name: Daily Sales Monitor
+
+on:
+  schedule:
+    # Run at 1 PM UTC (adjust time as needed)
+    - cron: '0 13 * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  sales-monitor:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install sp-api certifi pandas httpx
+
+      - name: Run Sales Monitor
+        env:
+          JUNGLE_SCOUT_API_KEY_NAME: ${{ secrets.JUNGLE_SCOUT_API_KEY_NAME }}
+          JUNGLE_SCOUT_API_KEY: ${{ secrets.JUNGLE_SCOUT_API_KEY }}
+          LWA_APP_ID: ${{ secrets.LWA_APP_ID }}
+          LWA_CLIENT_SECRET: ${{ secrets.LWA_CLIENT_SECRET }}
+          SP_API_REFRESH_TOKEN: ${{ secrets.SP_API_REFRESH_TOKEN }}
+          SELLER_ID: ${{ secrets.SELLER_ID }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_RECIPIENT: ${{ secrets.SMTP_RECIPIENT }}
+        run: python sales_monitor.py
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add data/
+          git commit -m "Auto: Sales monitor data updated" || echo "No changes to commit"
+          git push
