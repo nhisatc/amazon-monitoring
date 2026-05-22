@@ -1,5 +1,9 @@
 name: Review Monitor (Every 2 Hours)
 
+permissions:
+  contents: write
+  metadata: read
+
 on:
   schedule:
     # Run at midnight EST (5am UTC) plus every 2 hours during day
