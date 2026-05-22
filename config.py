@@ -10,11 +10,11 @@ SSL_VERIFY = certifi.where()
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
 SP_API_CREDENTIALS = {
-    "lwa_app_id":      os.environ["LWA_APP_ID"],
-    "lwa_client_secret": os.environ["LWA_CLIENT_SECRET"],
-    "refresh_token":   os.environ["SP_API_REFRESH_TOKEN"],
+    "lwa_app_id":      os.environ.get("LWA_APP_ID"),
+    "lwa_client_secret": os.environ.get("LWA_CLIENT_SECRET"),
+    "refresh_token":   os.environ.get("SP_API_REFRESH_TOKEN"),
 }
-SELLER_ID      = os.environ["SELLER_ID"]
+SELLER_ID      = os.environ.get("SELLER_ID")
 MARKETPLACE_ID = os.environ.get("MARKETPLACE_ID", "ATVPDKIKX0DER")
 
 GMAIL_ADDRESS      = os.environ["GMAIL_ADDRESS"]
