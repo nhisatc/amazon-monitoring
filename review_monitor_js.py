@@ -21,8 +21,8 @@ import os
 import datetime
 import time
 
-from junglescout import ClientSync
-from junglescout.models.parameters.marketplace import Marketplace
+from junglescout_client import ClientSync
+from junglescout_client.models.parameters.marketplace import Marketplace
 
 import config
 from mailer import send_alert
