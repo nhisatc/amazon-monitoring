@@ -1,5 +1,8 @@
 name: Daily Sales Monitor
 
+permissions:
+  contents: write
+
 on:
   schedule:
     # Run at midnight EST (5am UTC) and 1 PM UTC
@@ -12,17 +15,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install sp-api certifi pandas httpx
+          pip install python-amazon-sp-api certifi pandas httpx python-dotenv
 
       - name: Run Sales Monitor
         env:
@@ -32,9 +37,9 @@ jobs:
           LWA_CLIENT_SECRET: ${{ secrets.LWA_CLIENT_SECRET }}
           SP_API_REFRESH_TOKEN: ${{ secrets.SP_API_REFRESH_TOKEN }}
           SELLER_ID: ${{ secrets.SELLER_ID }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          SMTP_RECIPIENT: ${{ secrets.SMTP_RECIPIENT }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          ALERT_RECIPIENTS: ${{ secrets.ALERT_RECIPIENTS }}
         run: python sales_monitor.py
 
       - name: Commit and push changes
