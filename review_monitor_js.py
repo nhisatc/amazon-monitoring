@@ -157,33 +157,18 @@ def detect_review_changes(current: dict, previous: dict) -> list[dict]:
 
 # ── Email formatting ───────────────────────────────────────────────────────────
 
-REMOVAL_PROTOCOL = """\
-<div style='background:#fff3e0;border-left:4px solid #ff9800;padding:12px;margin-bottom:12px;border-radius:4px'>
-  <strong style='color:#e65100'>Step 1 — Try to Remove the Feedback</strong>
-  <ol style='margin:8px 0 0;padding-left:20px;font-size:13px'>
-    <li>Go to <a href='https://sellercentral.amazon.com/feedback-manager'>Seller Central → Feedback Manager</a></li>
-    <li>Filter by <strong>Negative</strong> feedback</li>
-    <li>Find the feedback and click <strong>Actions</strong></li>
-    <li>Select the appropriate removal reason (e.g. product review posted as seller feedback, contains abusive language, etc.)</li>
-    <li>Submit the removal request</li>
-  </ol>
-</div>
-<div style='background:#e3f2fd;border-left:4px solid #2196f3;padding:12px;border-radius:4px'>
-  <strong style='color:#1565c0'>Step 2 — If Removal Fails, Offer a Refund</strong>
-  <p style='margin:8px 0 0;font-size:13px'>If Amazon denies the removal request, respond to the customer:</p>
-  <blockquote style='margin:8px 0 0;padding:8px 12px;background:#f5f5f5;border-radius:4px;font-size:13px;font-style:italic'>
-    Hi there,<br><br>
-    Thank you for your feedback. We're sorry your experience didn't meet expectations — we want to make it right.<br><br>
-    <strong>We'd like to offer you a full refund.</strong> Please reach us at
-    <a href="mailto:support@usplushealth.com">support@usplushealth.com</a>
-    and we'll process it right away, no questions asked.<br><br>
-    If you're open to sharing what went wrong, we'd genuinely love to hear it.
-    Your feedback helps us improve for everyone.<br><br>
-    We hope to earn back your trust.<br>
-    Warm regards,<br>US+ Health Team
-  </blockquote>
-</div>
-"""
+CUSTOMER_DRAFT = """\
+Hi there,
+
+Thank you for your feedback. We're sorry your experience didn't meet expectations — we want to make it right.
+
+We'd like to offer you a full refund. Please reach us at support@usplushealth.com and we'll process it right away, no questions asked.
+
+If you're open to sharing what went wrong, we'd genuinely love to hear it. Your feedback helps us improve for everyone.
+
+We hope to earn back your trust.
+Warm regards,
+US+ Health Team"""
 
 
 def _stars(rating: float) -> str:
@@ -220,12 +205,11 @@ def _build_email(alerts: list[dict]) -> tuple[str, str]:
           </p>
           <details>
             <summary style='cursor:pointer;color:#2980b9;font-weight:bold;margin-top:8px'>
-              Action Protocol (click to expand)
+              Draft message to customer (click to copy)
             </summary>
-            <div style='margin-top:12px;padding:12px;background:#f0f7ff;
-                        border-radius:4px;font-size:14px'>
-              {REMOVAL_PROTOCOL}
-            </div>
+            <pre style='margin-top:12px;padding:12px;background:#f5f5f5;
+                        border-radius:4px;font-size:13px;white-space:pre-wrap;
+                        border:1px solid #ddd'>{CUSTOMER_DRAFT}</pre>
           </details>
         </div>"""
 
@@ -233,8 +217,8 @@ def _build_email(alerts: list[dict]) -> tuple[str, str]:
     <html><body style='font-family:Arial,sans-serif;color:#333;max-width:700px'>
       <h2 style='color:#e74c3c'>ALERT: Possible Low-Star Review — US+ Health</h2>
       <p>The following ASIN(s) show a rating drop or new reviews with a low average.
-         <strong>First try to remove the feedback via Feedback Manager, then offer a refund if removal fails.</strong>
-         Check the listing to confirm the review rating before taking action.</p>
+         <strong>Try to remove via <a href='https://sellercentral.amazon.com/feedback-manager'>Feedback Manager</a> first (filter Negative → Actions → select reason).
+         If removal fails, use the draft message below to offer a refund.</strong></p>
       {cards}
       <p style='color:#888;font-size:12px;margin-top:24px'>
         Automated alert via Jungle Scout · US+ Health Monitor · {datetime.date.today()}
