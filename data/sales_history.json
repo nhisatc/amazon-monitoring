@@ -1,35 +1,5 @@
 [
   {
-    "date": "2026-03-19",
-    "asin": "B0BR99MF15",
-    "units": 95.0,
-    "revenue": 986.77
-  },
-  {
-    "date": "2026-03-19",
-    "asin": "B097HP7DQ6",
-    "units": 270.0,
-    "revenue": 2629.57
-  },
-  {
-    "date": "2026-03-19",
-    "asin": "B09CV925V4",
-    "units": 193.0,
-    "revenue": 1881.88
-  },
-  {
-    "date": "2026-03-19",
-    "asin": "B0BJH3RD1F",
-    "units": 74.0,
-    "revenue": 641.66
-  },
-  {
-    "date": "2026-03-19",
-    "asin": "B0DDWQ1515",
-    "units": 103.0,
-    "revenue": 882.37
-  },
-  {
     "date": "2026-03-20",
     "asin": "B0BR99MF15",
     "units": 117.0,
