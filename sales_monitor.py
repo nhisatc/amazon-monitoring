@@ -145,18 +145,20 @@ def _asin_totals(df: pd.DataFrame, start: datetime.date, end: datetime.date) -> 
 
 
 def detect_changes(history: pd.DataFrame) -> list[dict]:
-    today   = datetime.date.today()
-    alerts  = []
+    # Use yesterday as reference — today's data is never complete due to
+    # Amazon SP-API's 24-48 hour processing delay.
+    yesterday = datetime.date.today() - datetime.timedelta(days=1)
+    alerts    = []
 
     windows = [
-        ("Daily",   today - datetime.timedelta(days=1), today - datetime.timedelta(days=1),
-                    today - datetime.timedelta(days=2), today - datetime.timedelta(days=2)),
-        ("Weekly",  today - datetime.timedelta(days=6), today,
-                    today - datetime.timedelta(days=13), today - datetime.timedelta(days=7)),
-        ("Monthly", today - datetime.timedelta(days=29), today,
-                    today - datetime.timedelta(days=59), today - datetime.timedelta(days=30)),
-        ("Yearly",  today - datetime.timedelta(days=364), today,
-                    today - datetime.timedelta(days=729), today - datetime.timedelta(days=365)),
+        ("Daily",   yesterday, yesterday,
+                    yesterday - datetime.timedelta(days=1), yesterday - datetime.timedelta(days=1)),
+        ("Weekly",  yesterday - datetime.timedelta(days=6), yesterday,
+                    yesterday - datetime.timedelta(days=13), yesterday - datetime.timedelta(days=7)),
+        ("Monthly", yesterday - datetime.timedelta(days=29), yesterday,
+                    yesterday - datetime.timedelta(days=59), yesterday - datetime.timedelta(days=30)),
+        ("Yearly",  yesterday - datetime.timedelta(days=364), yesterday,
+                    yesterday - datetime.timedelta(days=729), yesterday - datetime.timedelta(days=365)),
     ]
 
     for label, cur_start, cur_end, prev_start, prev_end in windows:
@@ -229,19 +231,25 @@ def _build_email(alerts: list[dict]) -> str:
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def run():
-    today   = datetime.date.today()
-    history = load_history()
+    # Fetch yesterday's data — Amazon SP-API has a 24-48 hour processing
+    # delay, so today's numbers are almost always incomplete / zero.
+    yesterday = datetime.date.today() - datetime.timedelta(days=1)
+    history   = load_history()
 
-    # Only fetch today's data if we don't already have it
-    if today.isoformat() not in history["date"].values:
-        print(f"Fetching sales report for {today}…")
-        df_today = fetch_sales_report(today)
-        history  = pd.concat([history, df_today], ignore_index=True)
+    if yesterday.isoformat() not in history["date"].values:
+        print(f"Fetching sales report for {yesterday}…")
+        df_yesterday = fetch_sales_report(yesterday)
+        history = pd.concat([history, df_yesterday], ignore_index=True)
         save_history(history)
     else:
-        print(f"Sales data for {today} already in history, skipping fetch.")
+        print(f"Sales data for {yesterday} already in history, skipping fetch.")
 
     alerts = detect_changes(history)
+
+    # Safety check: drop any alert where the current-period total is 0 —
+    # that almost always means the data hasn't been processed yet.
+    alerts = [a for a in alerts if a["current"] > 0]
+
     if alerts:
         print(f"Sending alert: {len(alerts)} ASIN/window combinations triggered.")
         send_alert(
