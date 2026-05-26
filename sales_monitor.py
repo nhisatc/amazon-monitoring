@@ -183,6 +183,8 @@ def detect_changes(history: pd.DataFrame) -> list[dict]:
                     "pct":       pct,
                     "current":   cur_val,
                     "previous":  prev_val,
+                    "cur_dates": f"{cur_start.strftime('%b %d')} – {cur_end.strftime('%b %d')}",
+                    "prev_dates": f"{prev_start.strftime('%b %d')} – {prev_end.strftime('%b %d')}",
                 })
 
     return alerts
@@ -198,7 +200,9 @@ def _build_email(alerts: list[dict]) -> str:
         rows += (
             f"<tr>"
             f"<td style='padding:6px 12px;border-bottom:1px solid #eee'>{a['asin']}</td>"
-            f"<td style='padding:6px 12px;border-bottom:1px solid #eee'>{a['window']}</td>"
+            f"<td style='padding:6px 12px;border-bottom:1px solid #eee'>"
+            f"{a['window']}<br><span style='color:#888;font-size:11px'>"
+            f"{a['cur_dates']} vs {a['prev_dates']}</span></td>"
             f"<td style='padding:6px 12px;border-bottom:1px solid #eee;color:{color};font-weight:bold'>"
             f"{arrow} {abs(a['pct']):.1%}</td>"
             f"<td style='padding:6px 12px;border-bottom:1px solid #eee'>"
