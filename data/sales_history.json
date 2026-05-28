@@ -1960,5 +1960,53 @@
     "asin": "B0DSCKXPQH",
     "units": 3.0,
     "revenue": 74.97
+  },
+  {
+    "date": "2026-05-27",
+    "asin": "B08Y7X8375",
+    "units": 39.0,
+    "revenue": 379.62
+  },
+  {
+    "date": "2026-05-27",
+    "asin": "B08Y83DNZ5",
+    "units": 22.0,
+    "revenue": 505.78
+  },
+  {
+    "date": "2026-05-27",
+    "asin": "B097HP7DQ6",
+    "units": 46.0,
+    "revenue": 1609.54
+  },
+  {
+    "date": "2026-05-27",
+    "asin": "B097LTHS4S",
+    "units": 109.0,
+    "revenue": 1741.79
+  },
+  {
+    "date": "2026-05-27",
+    "asin": "B0BJH3RD1F",
+    "units": 20.0,
+    "revenue": 299.8
+  },
+  {
+    "date": "2026-05-27",
+    "asin": "B09CV925V4",
+    "units": 9.0,
+    "revenue": 89.91
+  },
+  {
+    "date": "2026-05-27",
+    "asin": "B0BR99MF15",
+    "units": 151.0,
+    "revenue": 4491.3
+  },
+  {
+    "date": "2026-05-27",
+    "asin": "B0DDWQ1515",
+    "units": 15.0,
+    "revenue": 269.85
   }
 ]
