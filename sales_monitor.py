@@ -1,12 +1,15 @@
 """
 Sales change monitor
 --------------------
-Pulls the Sales & Traffic report from SP-API (daily ASIN granularity),
-stores a rolling history in data/sales_history.json, then alerts
-if any ASIN has a ≥20 % change day-over-day, week-over-week, or
-month-over-month.
+Pulls the Sales & Traffic report from SP-API (daily, child-ASIN granularity),
+stores a rolling 65-day history in data/sales_history.json, then alerts
+if any ASIN has a ≥20 % change day-over-day, week-over-week, month-over-month,
+or year-over-year.
 
-Run daily (e.g. 8 AM) via Task Scheduler or Cloud Scheduler.
+Uses YESTERDAY as the reference date because Amazon SP-API has a 24-48 hour
+processing delay — today's data is always incomplete.
+
+Run daily at midnight via Task Scheduler (local) or GitHub Actions (cloud).
 """
 
 import json
@@ -130,8 +133,8 @@ def load_history() -> pd.DataFrame:
 
 def save_history(df: pd.DataFrame):
     os.makedirs(config.DATA_DIR, exist_ok=True)
-    # Keep only the last 65 days to limit file size
-    cutoff = (datetime.date.today() - datetime.timedelta(days=65)).isoformat()
+    # Keep 730 days to support yearly comparisons (~400KB max)
+    cutoff = (datetime.date.today() - datetime.timedelta(days=730)).isoformat()
     df = df[df["date"] >= cutoff]
     with open(HISTORY_FILE, "w") as f:
         json.dump(df.to_dict(orient="records"), f, indent=2)
@@ -243,6 +246,13 @@ def run():
     if yesterday.isoformat() not in history["date"].values:
         print(f"Fetching sales report for {yesterday}…")
         df_yesterday = fetch_sales_report(yesterday)
+
+        # Guard: if SP-API returned no ASIN rows, the data isn't ready yet.
+        if df_yesterday.empty:
+            print(f"No ASIN-level data returned for {yesterday} — SP-API hasn't processed it yet.")
+            print("Skipping alerts. Will retry next run.")
+            return
+
         history = pd.concat([history, df_yesterday], ignore_index=True)
         save_history(history)
     else:

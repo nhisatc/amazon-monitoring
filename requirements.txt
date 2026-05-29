@@ -1,3 +1,6 @@
-streamlit>=1.28.0
-plotly>=5.17.0
-pandas>=2.0.0
+python-amazon-sp-api
+junglescout-client
+pandas
+httpx
+certifi
+python-dotenv
