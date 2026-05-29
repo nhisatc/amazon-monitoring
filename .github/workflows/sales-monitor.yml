@@ -5,9 +5,7 @@ permissions:
 
 on:
   schedule:
-    # Run at midnight EST (5am UTC) and 1 PM UTC
-    - cron: '0 5 * * *'    # Midnight EST / 5am UTC
-    - cron: '0 13 * * *'   # 1 PM UTC / 8am EDT / 7am EST
+    - cron: '0 5 * * *'    # Once daily at midnight EST (5am UTC)
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
