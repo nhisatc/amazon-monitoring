@@ -238,25 +238,31 @@ def _build_email(alerts: list[dict]) -> str:
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def run():
-    # Fetch yesterday's data — Amazon SP-API has a 24-48 hour processing
-    # delay, so today's numbers are almost always incomplete / zero.
-    yesterday = datetime.date.today() - datetime.timedelta(days=1)
-    history   = load_history()
+    # Amazon SP-API needs ~48 hours to produce ASIN-level breakdowns.
+    # "yesterday" (1 day ago) often has date-level totals but empty ASIN data.
+    # We fetch the TWO most recent days that aren't already stored, which
+    # ensures we always pick up data as soon as it becomes available.
+    history = load_history()
+    new_data = False
 
-    if yesterday.isoformat() not in history["date"].values:
-        print(f"Fetching sales report for {yesterday}…")
-        df_yesterday = fetch_sales_report(yesterday)
+    for days_ago in range(1, 4):  # try 1, 2, 3 days ago
+        target = datetime.date.today() - datetime.timedelta(days=days_ago)
+        if target.isoformat() in history["date"].values:
+            continue
 
-        # Guard: if SP-API returned no ASIN rows, the data isn't ready yet.
-        if df_yesterday.empty:
-            print(f"No ASIN-level data returned for {yesterday} — SP-API hasn't processed it yet.")
-            print("Skipping alerts. Will retry next run.")
-            return
+        print(f"Fetching sales report for {target}…")
+        df_day = fetch_sales_report(target)
 
-        history = pd.concat([history, df_yesterday], ignore_index=True)
+        if df_day.empty:
+            print(f"No ASIN-level data for {target} — not ready yet, skipping.")
+            continue
+
+        history = pd.concat([history, df_day], ignore_index=True)
+        new_data = True
+        print(f"Added {len(df_day)} rows for {target}.")
+
+    if new_data:
         save_history(history)
-    else:
-        print(f"Sales data for {yesterday} already in history, skipping fetch.")
 
     alerts = detect_changes(history)
 
