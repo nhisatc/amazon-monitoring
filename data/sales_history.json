@@ -1978,5 +1978,113 @@
     "asin": "B0DDWQ1515",
     "units": 15.0,
     "revenue": 269.85
+  },
+  {
+    "date": "2026-05-30",
+    "asin": "B08Y83DNZ5",
+    "units": 9.0,
+    "revenue": 206.91
+  },
+  {
+    "date": "2026-05-30",
+    "asin": "B09CV925V4",
+    "units": 15.0,
+    "revenue": 149.85
+  },
+  {
+    "date": "2026-05-30",
+    "asin": "B097LTHS4S",
+    "units": 139.0,
+    "revenue": 2206.3
+  },
+  {
+    "date": "2026-05-30",
+    "asin": "B097HP7DQ6",
+    "units": 48.0,
+    "revenue": 1677.52
+  },
+  {
+    "date": "2026-05-30",
+    "asin": "B0DDWQ1515",
+    "units": 17.0,
+    "revenue": 305.83
+  },
+  {
+    "date": "2026-05-30",
+    "asin": "B0BJH3RD1F",
+    "units": 21.0,
+    "revenue": 314.79
+  },
+  {
+    "date": "2026-05-30",
+    "asin": "B08Y7X8375",
+    "units": 24.0,
+    "revenue": 239.76
+  },
+  {
+    "date": "2026-05-30",
+    "asin": "B0BR99MF15",
+    "units": 132.0,
+    "revenue": 3928.69
+  },
+  {
+    "date": "2026-05-30",
+    "asin": "B0DSCKXPQH",
+    "units": 6.0,
+    "revenue": 149.94
+  },
+  {
+    "date": "2026-05-29",
+    "asin": "B08Y83DNZ5",
+    "units": 24.0,
+    "revenue": 551.76
+  },
+  {
+    "date": "2026-05-29",
+    "asin": "B09CV925V4",
+    "units": 6.0,
+    "revenue": 59.94
+  },
+  {
+    "date": "2026-05-29",
+    "asin": "B097LTHS4S",
+    "units": 105.0,
+    "revenue": 1677.67
+  },
+  {
+    "date": "2026-05-29",
+    "asin": "B097HP7DQ6",
+    "units": 36.0,
+    "revenue": 1259.64
+  },
+  {
+    "date": "2026-05-29",
+    "asin": "B0DDWQ1515",
+    "units": 10.0,
+    "revenue": 179.9
+  },
+  {
+    "date": "2026-05-29",
+    "asin": "B0BJH3RD1F",
+    "units": 16.0,
+    "revenue": 239.84
+  },
+  {
+    "date": "2026-05-29",
+    "asin": "B08Y7X8375",
+    "units": 24.0,
+    "revenue": 239.76
+  },
+  {
+    "date": "2026-05-29",
+    "asin": "B0BR99MF15",
+    "units": 160.0,
+    "revenue": 4764.81
+  },
+  {
+    "date": "2026-05-29",
+    "asin": "B0DSCKXPQH",
+    "units": 3.0,
+    "revenue": 74.97
   }
 ]
