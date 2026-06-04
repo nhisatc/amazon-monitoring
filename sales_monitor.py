@@ -148,20 +148,24 @@ def _asin_totals(df: pd.DataFrame, start: datetime.date, end: datetime.date) -> 
 
 
 def detect_changes(history: pd.DataFrame) -> list[dict]:
-    # Use yesterday as reference — today's data is never complete due to
-    # Amazon SP-API's 24-48 hour processing delay.
-    yesterday = datetime.date.today() - datetime.timedelta(days=1)
-    alerts    = []
+    # Use the most recent date we actually have data for as the reference point.
+    # This ensures both windows always have the same number of days available —
+    # comparing 5 days vs 7 days would produce false drops.
+    available_dates = sorted(history["date"].unique())
+    if not available_dates:
+        return []
+    ref_date = datetime.date.fromisoformat(available_dates[-1])
+    alerts = []
 
     windows = [
-        ("Daily",   yesterday - datetime.timedelta(days=1), yesterday - datetime.timedelta(days=1),
-                    yesterday - datetime.timedelta(days=2), yesterday - datetime.timedelta(days=2)),
-        ("Weekly",  yesterday - datetime.timedelta(days=6), yesterday,
-                    yesterday - datetime.timedelta(days=13), yesterday - datetime.timedelta(days=7)),
-        ("Monthly", yesterday - datetime.timedelta(days=29), yesterday,
-                    yesterday - datetime.timedelta(days=59), yesterday - datetime.timedelta(days=30)),
-        ("Yearly",  yesterday - datetime.timedelta(days=364), yesterday,
-                    yesterday - datetime.timedelta(days=729), yesterday - datetime.timedelta(days=365)),
+        ("Daily",   ref_date, ref_date,
+                    ref_date - datetime.timedelta(days=1), ref_date - datetime.timedelta(days=1)),
+        ("Weekly",  ref_date - datetime.timedelta(days=6), ref_date,
+                    ref_date - datetime.timedelta(days=13), ref_date - datetime.timedelta(days=7)),
+        ("Monthly", ref_date - datetime.timedelta(days=29), ref_date,
+                    ref_date - datetime.timedelta(days=59), ref_date - datetime.timedelta(days=30)),
+        ("Yearly",  ref_date - datetime.timedelta(days=364), ref_date,
+                    ref_date - datetime.timedelta(days=729), ref_date - datetime.timedelta(days=365)),
     ]
 
     for label, cur_start, cur_end, prev_start, prev_end in windows:
