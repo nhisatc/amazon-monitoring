@@ -154,8 +154,8 @@ def detect_changes(history: pd.DataFrame) -> list[dict]:
     alerts    = []
 
     windows = [
-        ("Daily",   yesterday, yesterday,
-                    yesterday - datetime.timedelta(days=1), yesterday - datetime.timedelta(days=1)),
+        ("Daily",   yesterday - datetime.timedelta(days=1), yesterday - datetime.timedelta(days=1),
+                    yesterday - datetime.timedelta(days=2), yesterday - datetime.timedelta(days=2)),
         ("Weekly",  yesterday - datetime.timedelta(days=6), yesterday,
                     yesterday - datetime.timedelta(days=13), yesterday - datetime.timedelta(days=7)),
         ("Monthly", yesterday - datetime.timedelta(days=29), yesterday,
