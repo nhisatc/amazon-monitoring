@@ -5,7 +5,11 @@ from config import GMAIL_ADDRESS, GMAIL_APP_PASSWORD
 
 
 def send_alert(subject: str, body_html: str, recipients: list[str] = None):
-    recipients = recipients or ["venus@usplushealth.com"]
+    recipients = recipients or [
+        "venus@usplushealth.com",
+        "max@usplushealth.com",
+        "julian@usplushealth.com",
+    ]
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"]    = GMAIL_ADDRESS
