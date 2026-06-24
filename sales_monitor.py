@@ -204,9 +204,11 @@ def _build_email(alerts: list[dict]) -> str:
     for a in alerts:
         color = "#c0392b" if a["direction"] == "drop" else "#27ae60"
         arrow = "▼" if a["direction"] == "drop" else "▲"
+        name = config.ASIN_NAMES.get(a["asin"], "")
+        name_html = f"<br><span style='color:#555;font-size:11px'>{name}</span>" if name else ""
         rows += (
             f"<tr>"
-            f"<td style='padding:6px 12px;border-bottom:1px solid #eee'>{a['asin']}</td>"
+            f"<td style='padding:6px 12px;border-bottom:1px solid #eee'>{a['asin']}{name_html}</td>"
             f"<td style='padding:6px 12px;border-bottom:1px solid #eee'>"
             f"{a['window']}<br><span style='color:#888;font-size:11px'>"
             f"{a['cur_dates']} vs {a['prev_dates']}</span></td>"
