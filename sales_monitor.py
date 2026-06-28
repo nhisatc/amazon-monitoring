@@ -199,43 +199,99 @@ def detect_changes(history: pd.DataFrame) -> list[dict]:
 
 # ── Email formatting ───────────────────────────────────────────────────────────
 
-def _build_email(alerts: list[dict]) -> str:
-    rows = ""
-    for a in alerts:
+def _build_email(history: pd.DataFrame, alerts: list[dict]) -> str:
+    available_dates = sorted(history["date"].unique())
+    ref_date = datetime.date.fromisoformat(available_dates[-1])
+    prev_date = ref_date - datetime.timedelta(days=1)
+
+    # Daily summary — all products
+    today_totals    = _asin_totals(history, ref_date, ref_date)
+    yday_totals     = _asin_totals(history, prev_date, prev_date)
+    all_asins       = sorted(set(today_totals.index) | set(yday_totals.index))
+
+    summary_rows = ""
+    for asin in all_asins:
+        cur  = int(today_totals.get(asin, 0))
+        prev = int(yday_totals.get(asin, 0))
+        name = config.ASIN_NAMES.get(asin, asin)
+        if prev > 0:
+            pct = (cur - prev) / prev
+            if abs(pct) >= config.SALES_THRESHOLD:
+                arrow = "▼" if pct < 0 else "▲"
+                col   = "#c0392b" if pct < 0 else "#27ae60"
+                chg   = f"<span style='color:{col};font-weight:bold'>{arrow} {abs(pct):.0%}</span>"
+            else:
+                chg = f"<span style='color:#888'>{pct:+.0%}</span>"
+        else:
+            chg = "<span style='color:#aaa'>—</span>"
+        summary_rows += (
+            f"<tr>"
+            f"<td style='padding:5px 10px;border-bottom:1px solid #eee;font-size:12px;color:#555'>{name}</td>"
+            f"<td style='padding:5px 10px;border-bottom:1px solid #eee;font-size:11px;color:#888'>{asin}</td>"
+            f"<td style='padding:5px 10px;border-bottom:1px solid #eee;text-align:right'>{prev}</td>"
+            f"<td style='padding:5px 10px;border-bottom:1px solid #eee;text-align:right'>{cur}</td>"
+            f"<td style='padding:5px 10px;border-bottom:1px solid #eee;text-align:right'>{chg}</td>"
+            f"</tr>"
+        )
+
+    # Significant changes — weekly / monthly / yearly only
+    big_alerts = [a for a in alerts if a["window"] != "Daily"]
+    alert_rows = ""
+    for a in big_alerts:
         color = "#c0392b" if a["direction"] == "drop" else "#27ae60"
         arrow = "▼" if a["direction"] == "drop" else "▲"
-        name = config.ASIN_NAMES.get(a["asin"], "")
-        name_html = f"<br><span style='color:#555;font-size:11px'>{name}</span>" if name else ""
-        rows += (
+        name  = config.ASIN_NAMES.get(a["asin"], a["asin"])
+        alert_rows += (
             f"<tr>"
-            f"<td style='padding:6px 12px;border-bottom:1px solid #eee'>{a['asin']}{name_html}</td>"
-            f"<td style='padding:6px 12px;border-bottom:1px solid #eee'>"
-            f"{a['window']}<br><span style='color:#888;font-size:11px'>"
-            f"{a['cur_dates']} vs {a['prev_dates']}</span></td>"
-            f"<td style='padding:6px 12px;border-bottom:1px solid #eee;color:{color};font-weight:bold'>"
+            f"<td style='padding:6px 10px;border-bottom:1px solid #eee;font-size:12px'>{name}"
+            f"<br><span style='color:#aaa;font-size:10px'>{a['asin']}</span></td>"
+            f"<td style='padding:6px 10px;border-bottom:1px solid #eee;font-size:12px'>{a['window']}"
+            f"<br><span style='color:#aaa;font-size:10px'>{a['cur_dates']} vs {a['prev_dates']}</span></td>"
+            f"<td style='padding:6px 10px;border-bottom:1px solid #eee;color:{color};font-weight:bold'>"
             f"{arrow} {abs(a['pct']):.1%}</td>"
-            f"<td style='padding:6px 12px;border-bottom:1px solid #eee'>"
+            f"<td style='padding:6px 10px;border-bottom:1px solid #eee;font-size:12px'>"
             f"{int(a['previous'])} → {int(a['current'])} units</td>"
             f"</tr>"
         )
 
-    return f"""
-    <html><body style='font-family:Arial,sans-serif;color:#333'>
-    <h2 style='color:#e67e22'>⚠️ Amazon Sales Alert — US+ Health</h2>
-    <p>The following ASINs have a <strong>≥20% change</strong> in units sold:</p>
+    alert_section = ""
+    if alert_rows:
+        alert_section = f"""
+    <h3 style='color:#e67e22;margin-top:28px'>Significant Changes (Weekly / Monthly / Yearly)</h3>
     <table style='border-collapse:collapse;width:100%;max-width:700px'>
       <thead>
         <tr style='background:#f0f0f0'>
-          <th style='padding:8px 12px;text-align:left'>ASIN</th>
-          <th style='padding:8px 12px;text-align:left'>Window</th>
-          <th style='padding:8px 12px;text-align:left'>Change</th>
-          <th style='padding:8px 12px;text-align:left'>Units</th>
+          <th style='padding:7px 10px;text-align:left;font-size:12px'>Product</th>
+          <th style='padding:7px 10px;text-align:left;font-size:12px'>Window</th>
+          <th style='padding:7px 10px;text-align:left;font-size:12px'>Change</th>
+          <th style='padding:7px 10px;text-align:left;font-size:12px'>Units</th>
         </tr>
       </thead>
-      <tbody>{rows}</tbody>
+      <tbody>{alert_rows}</tbody>
+    </table>"""
+
+    return f"""
+    <html><body style='font-family:Arial,sans-serif;color:#333'>
+    <h2 style='color:#2c3e50'>Amazon Daily Sales Report — US+ Health</h2>
+    <p style='color:#555;font-size:13px'>
+      Reference date: <strong>{ref_date.strftime('%b %d, %Y')}</strong> vs previous day
+      ({prev_date.strftime('%b %d')})
+    </p>
+    <table style='border-collapse:collapse;width:100%;max-width:700px'>
+      <thead>
+        <tr style='background:#f0f0f0'>
+          <th style='padding:7px 10px;text-align:left;font-size:12px'>Product</th>
+          <th style='padding:7px 10px;text-align:left;font-size:12px'>ASIN</th>
+          <th style='padding:7px 10px;text-align:right;font-size:12px'>Yesterday</th>
+          <th style='padding:7px 10px;text-align:right;font-size:12px'>Today</th>
+          <th style='padding:7px 10px;text-align:right;font-size:12px'>Change</th>
+        </tr>
+      </thead>
+      <tbody>{summary_rows}</tbody>
     </table>
-    <p style='color:#888;font-size:12px;margin-top:24px'>
-      Automated alert from US+ Health Amazon Monitor · {datetime.date.today()}
+    {alert_section}
+    <p style='color:#aaa;font-size:11px;margin-top:24px'>
+      Automated report from US+ Health Amazon Monitor · {datetime.date.today()}
     </p>
     </body></html>
     """
@@ -271,19 +327,13 @@ def run():
         save_history(history)
 
     alerts = detect_changes(history)
-
-    # Safety check: drop any alert where the current-period total is 0 —
-    # that almost always means the data hasn't been processed yet.
     alerts = [a for a in alerts if a["current"] > 0]
 
-    if alerts:
-        print(f"Sending alert: {len(alerts)} ASIN/window combinations triggered.")
-        send_alert(
-            subject=f"⚠️ Amazon Sales Alert — {len(alerts)} change(s) detected",
-            body_html=_build_email(alerts),
-        )
-    else:
-        print("No significant sales changes detected.")
+    print(f"Sending daily report ({len(alerts)} significant change(s)).")
+    send_alert(
+        subject=f"Amazon Daily Sales Report — {datetime.date.today().strftime('%b %d, %Y')}",
+        body_html=_build_email(history, alerts),
+    )
 
 
 if __name__ == "__main__":
