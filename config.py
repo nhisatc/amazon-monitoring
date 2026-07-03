@@ -40,6 +40,7 @@ ASIN_NAMES = {
     "B0CCMHLX72": "Castor Oil 20oz",
     "B0DDWQ1515": "Organic Castor Oil 16oz",
     "B0DSCKXPQH": "Organic Jojoba Oil 16oz",
+    "B0H6XVVWYQ": "Vegetable Glycerin & Castor Oil Bundle 1 Gal",
     # Deleted / inactive listings (still appear in historical data)
     "B09DZ4FW8S": "Sweet Almond Oil (Deleted)",
     "B09DZ64Q5G": "Sweet Almond Oil (Deleted)",
