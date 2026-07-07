@@ -1,9 +1,7 @@
 name: Amazon Buyer Message → Slack
 
 on:
-  schedule:
-    - cron: '*/5 * * * *'  # Every 5 minutes
-  workflow_dispatch:
+  workflow_dispatch:  # Manual only — replaced by Google Apps Script
 
 jobs:
   check-buyer-messages:
