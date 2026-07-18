@@ -204,10 +204,11 @@ def _build_email(history: pd.DataFrame, alerts: list[dict]) -> str:
     ref_date = datetime.date.fromisoformat(available_dates[-1])
     prev_date = ref_date - datetime.timedelta(days=1)
 
-    # Daily summary — all products
+    # Daily summary — all products (always show every named ASIN, even if 0 sales)
     today_totals    = _asin_totals(history, ref_date, ref_date)
     yday_totals     = _asin_totals(history, prev_date, prev_date)
-    all_asins       = sorted(set(today_totals.index) | set(yday_totals.index))
+    history_asins   = set(today_totals.index) | set(yday_totals.index)
+    all_asins       = sorted(set(config.ASIN_NAMES.keys()) | history_asins)
 
     summary_rows = ""
     for asin in all_asins:
