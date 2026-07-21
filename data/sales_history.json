@@ -6112,5 +6112,65 @@
     "asin": "B0H8F2HHXG",
     "units": 0,
     "revenue": 0.0
+  },
+  {
+    "date": "2026-07-19",
+    "asin": "B08Y7X8375",
+    "units": 34,
+    "revenue": 339.66
+  },
+  {
+    "date": "2026-07-19",
+    "asin": "B08Y83DNZ5",
+    "units": 30,
+    "revenue": 689.7
+  },
+  {
+    "date": "2026-07-19",
+    "asin": "B097LTHS4S",
+    "units": 123,
+    "revenue": 1843.77
+  },
+  {
+    "date": "2026-07-19",
+    "asin": "B0BJH3RD1F",
+    "units": 35,
+    "revenue": 524.65
+  },
+  {
+    "date": "2026-07-19",
+    "asin": "B0BR99MF15",
+    "units": 93,
+    "revenue": 2860.93
+  },
+  {
+    "date": "2026-07-19",
+    "asin": "B0DDWQ1515",
+    "units": 14,
+    "revenue": 246.86
+  },
+  {
+    "date": "2026-07-19",
+    "asin": "B0DSCKXPQH",
+    "units": 2,
+    "revenue": 59.98
+  },
+  {
+    "date": "2026-07-19",
+    "asin": "B0H6Q4X919",
+    "units": 0,
+    "revenue": 0.0
+  },
+  {
+    "date": "2026-07-19",
+    "asin": "B09CV925V4",
+    "units": 41,
+    "revenue": 286.59
+  },
+  {
+    "date": "2026-07-19",
+    "asin": "B097HP7DQ6",
+    "units": 124,
+    "revenue": 4338.76
   }
 ]
