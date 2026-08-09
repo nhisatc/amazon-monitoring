@@ -217,10 +217,7 @@ def _build_email(history: pd.DataFrame, alerts: list[dict]) -> str:
         # Skip rows where both values are zero
         if cur == 0 and prev == 0:
             continue
-        name = config.ASIN_NAMES.get(asin, "")
-        # Skip if no product name (unknown ASIN)
-        if not name:
-            continue
+        name = config.ASIN_NAMES.get(asin, asin)
         if prev > 0:
             pct = (cur - prev) / prev
             if abs(pct) >= config.SALES_THRESHOLD:
