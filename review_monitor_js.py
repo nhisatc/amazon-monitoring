@@ -286,6 +286,18 @@ def run():
     current = fetch_product_data(ALL_ASINS)
     print(f"  Got data for {len(current)} of {len(ALL_ASINS)} ASINs.")
 
+    # Fail loudly on a total fetch failure. This job reported success for three
+    # months while the Jungle Scout trial was expired and every call 403'd,
+    # because per-ASIN errors were swallowed and an empty result looks
+    # identical to "nothing changed". A monitor that cannot see is an outage,
+    # not a quiet all-clear.
+    if not current:
+        raise SystemExit(
+            "Review monitor fetched 0 of "
+            f"{len(ALL_ASINS)} ASINs — the data source is down, not quiet. "
+            "Check the Jungle Scout API subscription and key."
+        )
+
     alerts = detect_review_changes(current, snapshots)
 
     # Update snapshots with latest data
