@@ -4,3 +4,4 @@ pandas
 httpx
 certifi
 python-dotenv
+requests
