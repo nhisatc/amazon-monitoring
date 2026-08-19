@@ -1,0 +1,80 @@
+name: Voice-of-Customer Monitor
+
+permissions:
+  contents: write
+
+on:
+  schedule:
+    # Twice daily. This digests and clusters rather than reporting per event,
+    # so it needs a window of complaints to see a pattern in — running it more
+    # often would just split one incident across several alerts.
+    - cron: '0 2,14 * * *'
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Lookback window in days'
+        type: string
+        default: '7'
+      dry_run:
+        description: 'Preview only — send nothing, save no state'
+        type: boolean
+        default: false
+
+concurrency:
+  group: voc-monitor
+  cancel-in-progress: false
+
+jobs:
+  voc-monitor:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests python-dotenv certifi
+
+      - name: Run VOC monitor
+        env:
+          LWA_APP_ID:           ${{ secrets.LWA_APP_ID }}
+          LWA_CLIENT_SECRET:    ${{ secrets.LWA_CLIENT_SECRET }}
+          SP_API_REFRESH_TOKEN: ${{ secrets.SP_API_REFRESH_TOKEN }}
+          SELLER_ID:            ${{ secrets.SELLER_ID }}
+          MARKETPLACE_ID:       ${{ secrets.MARKETPLACE_ID }}
+          # Gmail here is the READ side — buyer message text is a VOC source.
+          GMAIL_ADDRESS:        ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD:   ${{ secrets.GMAIL_APP_PASSWORD }}
+          SMTP_FROM_ADDRESS:    ${{ secrets.SMTP_FROM_ADDRESS }}
+          SMTP_FROM_PASSWORD:   ${{ secrets.SMTP_FROM_PASSWORD }}
+          ALERT_RECIPIENTS:     ${{ secrets.ALERT_RECIPIENTS }}
+          SLACK_BOT_TOKEN:      ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID:     ${{ secrets.SLACK_CHANNEL_ID }}
+          JUNGLE_SCOUT_API_KEY_NAME: ${{ secrets.JUNGLE_SCOUT_API_KEY_NAME }}
+          JUNGLE_SCOUT_API_KEY:      ${{ secrets.JUNGLE_SCOUT_API_KEY }}
+        run: |
+          python voc_monitor.py \
+            --days ${{ inputs.days || '7' }} \
+            ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      - name: Commit state
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add data/
+          git diff --staged --quiet && echo "No changes" && exit 0
+          git commit -m "Auto: VOC monitor state updated"
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin main && git push && exit 0
+            echo "Push race, retry $i"
+            sleep 5
+          done
+          echo "Could not push state after 3 attempts" >&2
+          exit 1
