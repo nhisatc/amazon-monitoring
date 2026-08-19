@@ -9,6 +9,11 @@ on:
     # polling faster than this buys nothing. 06:00, 12:00, 18:00, 00:00 UTC.
     - cron: '0 0,6,12,18 * * *'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Preview only — render the alert but send nothing and save no state'
+        type: boolean
+        default: false
 
 concurrency:
   group: returns-monitor
@@ -43,9 +48,10 @@ jobs:
           ALERT_RECIPIENTS:     ${{ secrets.ALERT_RECIPIENTS }}
           SLACK_BOT_TOKEN:      ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID:     ${{ secrets.SLACK_CHANNEL_ID }}
-        run: python returns_monitor.py
+        run: python returns_monitor.py ${{ inputs.dry_run && '--dry-run' || '' }}
 
       - name: Commit state
+        if: ${{ !inputs.dry_run }}
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"

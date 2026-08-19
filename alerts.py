@@ -13,9 +13,11 @@ from email.mime.text import MIMEText
 
 import requests
 
+# Only used if ALERT_RECIPIENTS is unset. Kept in sync with that secret so a
+# missing variable degrades to the right people rather than a stale list.
 FALLBACK_RECIPIENTS = (
-    "carrie@usplushealth.com,max@usplushealth.com,"
-    "julian@usplushealth.com,hedda@usplushealth.com"
+    "lou@usplushealth.com,lloyd@usplushealth.com,stella@usplushealth.com,"
+    "max@usplushealth.com,carrie@usplushealth.com,mitchie@usplushealth.com"
 )
 
 # Read config at call time, not import time. Callers load .env themselves, and
