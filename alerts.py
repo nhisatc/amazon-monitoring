@@ -30,22 +30,34 @@ def _recipients() -> list[str]:
     return [r.strip() for r in raw.split(",") if r.strip()]
 
 
-def _sender() -> tuple[str, str]:
+def _sender() -> tuple[str, str, str]:
     """
-    The account alerts are sent FROM.
+    Returns (from_address, smtp_user, smtp_password).
 
-    Deliberately separate from GMAIL_ADDRESS, which is the mailbox the buyer
-    message monitor logs into to READ Amazon's messages. Those two are not the
-    same account: Amazon delivers to the Gmail address, but alerts should come
-    from the company address. Overloading one variable for both would point the
-    reader at an empty mailbox.
+    The visible From and the SMTP login are separated on purpose, because there
+    are two valid ways to send as the company address:
 
-    Falls back to the reading account when no separate sender is configured, so
-    existing setups keep working unchanged.
+      A. App password on that account — set SMTP_FROM_ADDRESS and
+         SMTP_FROM_PASSWORD. Logs in as that account directly.
+
+      B. Verified "Send mail as" alias — set only SMTP_FROM_ADDRESS. Keeps
+         logging in with the existing GMAIL_* credentials and just changes the
+         From. Requires the address to be verified as an alias on that account,
+         otherwise Gmail silently rewrites From back to the login address.
+
+    Note GMAIL_ADDRESS is the mailbox the buyer monitor READS; it is not
+    necessarily the identity alerts should come FROM. Conflating them would
+    point the reader at the wrong inbox.
     """
-    address  = os.environ.get("SMTP_FROM_ADDRESS")  or os.environ.get("GMAIL_ADDRESS", "")
-    password = os.environ.get("SMTP_FROM_PASSWORD") or os.environ.get("GMAIL_APP_PASSWORD", "")
-    return address, password
+    login_user     = os.environ.get("GMAIL_ADDRESS", "")
+    login_password = os.environ.get("GMAIL_APP_PASSWORD", "")
+
+    from_address = os.environ.get("SMTP_FROM_ADDRESS") or login_user
+    from_password = os.environ.get("SMTP_FROM_PASSWORD")
+
+    if from_password:                      # route A
+        return from_address, from_address, from_password
+    return from_address, login_user, login_password   # route B
 
 
 def is_dry_run() -> bool:
@@ -99,14 +111,14 @@ def post_slack(text: str, blocks: list | None = None) -> bool:
 def send_email(subject: str, body_html: str, recipients: list[str] | None = None) -> bool:
     """Send the HTML alert email. Returns True on success."""
     recipients = recipients or _recipients()
-    from_address, from_password = _sender()
-    if not from_address or not from_password:
+    from_address, smtp_user, smtp_password = _sender()
+    if not from_address or not smtp_user or not smtp_password:
         print("  Email: not configured, skipping")
         return False
 
     if is_dry_run():
         print(f"  Email: DRY RUN — would send '{subject}'")
-        print(f"          from {from_address} to {', '.join(recipients)}")
+        print(f"          from {from_address} (via {smtp_user}) to {', '.join(recipients)}")
         return True
 
     msg = MIMEMultipart("alternative")
@@ -117,7 +129,7 @@ def send_email(subject: str, body_html: str, recipients: list[str] | None = None
 
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(from_address, from_password)
+            server.login(smtp_user, smtp_password)
             server.sendmail(from_address, recipients, msg.as_string())
     except Exception as e:
         print(f"  Email: send failed — {e}")

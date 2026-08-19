@@ -319,7 +319,7 @@ def run():
     print("=== Returns Monitor (SP-API) ===")
     # Print the routing every run. Misdirected alerts are otherwise invisible
     # until someone notices they stopped arriving.
-    print(f"  Alerts route to Slack + email from {_sender()[0] or '(unset)'}")
+    print(f"  Alerts route to Slack + email from {_sender()[0] or '(unset)'} (via {_sender()[1] or '(unset)'})")
     for r in _recipients():
         print(f"    -> {r}")
 
