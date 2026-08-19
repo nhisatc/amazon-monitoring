@@ -118,6 +118,36 @@ def post_slack(text: str, blocks: list | None = None) -> bool:
     return True
 
 
+def verify_smtp_login() -> bool:
+    """
+    Authenticate against Gmail and disconnect without sending anything.
+
+    SMTP only rejects bad credentials at login, so a dry run that skips the
+    connection proves nothing about whether the app password actually works.
+    This closes that gap: real auth, no mail.
+    """
+    from_address, smtp_user, smtp_password = _sender()
+    if not smtp_user or not smtp_password:
+        print("  SMTP auth: not configured")
+        return False
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as server:
+            server.login(smtp_user, smtp_password)
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"  SMTP auth: FAILED for {smtp_user} — {e.smtp_code} {e.smtp_error}")
+        return False
+    except Exception as e:
+        print(f"  SMTP auth: could not verify — {e}")
+        return False
+
+    print(f"  SMTP auth: OK as {smtp_user}")
+    if from_address.lower() != smtp_user.lower():
+        print(f"  Note: sending as {from_address} requires it to be a verified "
+              f"alias on {smtp_user}, or Gmail will rewrite the From header.")
+    return True
+
+
 def send_email(subject: str, body_html: str, recipients: list[str] | None = None) -> bool:
     """Send the HTML alert email. Returns True on success."""
     recipients = recipients or _recipients()
@@ -129,6 +159,7 @@ def send_email(subject: str, body_html: str, recipients: list[str] | None = None
     if is_dry_run():
         print(f"  Email: DRY RUN — would send '{subject}'")
         print(f"          from {from_address} (via {smtp_user}) to {', '.join(recipients)}")
+        verify_smtp_login()
         return True
 
     msg = MIMEMultipart("alternative")

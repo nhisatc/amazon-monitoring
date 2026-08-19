@@ -314,7 +314,7 @@ def _build_slack(quality: list[dict], damage: list[dict], other_count: int) -> t
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def run():
-    from alerts import _recipients, _sender
+    from alerts import _recipients, _sender, is_dry_run, verify_smtp_login
 
     print("=== Returns Monitor (SP-API) ===")
     # Print the routing every run. Misdirected alerts are otherwise invisible
@@ -322,6 +322,11 @@ def run():
     print(f"  Alerts route to Slack + email from {_sender()[0] or '(unset)'} (via {_sender()[1] or '(unset)'})")
     for r in _recipients():
         print(f"    -> {r}")
+
+    # On a dry run, prove the credentials work even when there is nothing to
+    # report — otherwise a quiet day looks identical to a broken password.
+    if is_dry_run():
+        verify_smtp_login()
 
     state = load_state()
     seen  = set(state.get("seen", []))
