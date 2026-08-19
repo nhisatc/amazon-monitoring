@@ -230,12 +230,13 @@ MSG_BODY_RE = re.compile(r"-+\s*Message:\s*-+\s*\n(.*?)\n\s*-+\s*End message\s*-
 ASIN_RE = re.compile(r"\b(B0[A-Z0-9]{8})\b")
 
 
-def voc_from_messages(days: int) -> list[dict]:
+def voc_from_messages(days: int) -> tuple[list[dict], bool]:
+    """Returns (items, source_healthy). Empty-but-healthy differs from broken."""
     address  = os.environ.get("GMAIL_ADDRESS", "")
     password = os.environ.get("GMAIL_APP_PASSWORD", "")
     if not address or not password:
         print("  Buyer messages: Gmail not configured, skipping")
-        return []
+        return [], False
 
     items = []
     try:
@@ -293,7 +294,8 @@ def voc_from_messages(days: int) -> list[dict]:
         mail.logout()
     except Exception as e:
         print(f"  Buyer messages: fetch failed — {e}")
-    return items
+        return items, False
+    return items, True
 
 
 # ── Incident detection ─────────────────────────────────────────────────────────
@@ -456,12 +458,106 @@ def _build_email(incidents: list[dict], suppressed: int, days: int) -> tuple[str
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
-def run(days: int = LOOKBACK_DAYS, report_only: bool = False):
+def _build_digest(incidents, fresh, item_count, days, sources_ok, suppressed):
+    """
+    The daily all-clear. Sends whether or not anything is wrong, because a
+    monitor that only speaks up on bad news is indistinguishable from a monitor
+    that has silently died — which is precisely how the buyer-message and review
+    alerts stayed broken for months without anyone noticing.
+    """
+    p0 = sum(1 for i in incidents if i["severity"] == "P0")
+    p1 = sum(1 for i in incidents if i["severity"] == "P1")
+
+    if fresh:
+        headline = f"{len(fresh)} new issue(s)"
+        emoji, colour = ("🔴", "#c0392b") if p0 else ("🟠", "#e67e22")
+    elif incidents:
+        headline = f"No new issues — {len(incidents)} still open"
+        emoji, colour = "🟡", "#f1c40f"
+    else:
+        headline = "All clear"
+        emoji, colour = "🟢", "#27ae60"
+
+    health = " · ".join(
+        f"{'✅' if ok else '❌'} {name}" for name, ok in sources_ok.items()
+    )
+
+    blocks = [
+        {"type": "header",
+         "text": {"type": "plain_text", "text": f"{emoji} Daily customer check — {headline}",
+                  "emoji": True}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": (
+            f"*{item_count}* customer comments scanned over {days} days · "
+            f"*{len(incidents)}* open issue(s) ({p0} P0, {p1} P1)"
+            f"{f' · {suppressed} castor odour suppressed' if suppressed else ''}"
+        )}},
+    ]
+
+    for inc in (fresh or incidents)[:6]:
+        quote = next((i["text"] for i in inc["items"] if i["text"]), "")
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": (
+            f"{SEV_EMOJI[inc['severity']]} *{inc['label']}* — {inc['product']} "
+            f"({inc['count']} report(s))"
+            + (f"\n> _{quote[:180]}_" if quote else "")
+        )}})
+
+    blocks.append({"type": "context", "elements": [
+        {"type": "mrkdwn", "text": f"Sources: {health} · Review text unavailable (Amazon sign-in wall)"}]})
+
+    rows = ""
+    for inc in (fresh or incidents):
+        quote = next((i["text"] for i in inc["items"] if i["text"]), "")
+        rows += (f"<tr><td style='padding:6px 10px;border-bottom:1px solid #eee'>"
+                 f"<strong>{inc['severity']}</strong></td>"
+                 f"<td style='padding:6px 10px;border-bottom:1px solid #eee'>{inc['label']}</td>"
+                 f"<td style='padding:6px 10px;border-bottom:1px solid #eee'>{inc['product']}</td>"
+                 f"<td style='padding:6px 10px;border-bottom:1px solid #eee'>{inc['count']}</td></tr>"
+                 f"<tr><td colspan='4' style='padding:0 10px 10px;color:#555;font-style:italic'>"
+                 f"&ldquo;{quote[:300]}&rdquo;</td></tr>" if quote else "")
+
+    table = (f"<table style='border-collapse:collapse;width:100%;font-size:14px'>"
+             f"<tr style='background:#f5f5f5'><th align='left' style='padding:6px 10px'>Sev</th>"
+             f"<th align='left' style='padding:6px 10px'>Theme</th>"
+             f"<th align='left' style='padding:6px 10px'>Product</th>"
+             f"<th align='left' style='padding:6px 10px'>Reports</th></tr>{rows}</table>"
+             if rows else "<p>Nothing open.</p>")
+
+    subject = f"Daily customer check — {headline}"
+    html = f"""
+    <html><body style='font-family:Arial,sans-serif;color:#333;max-width:760px'>
+      <h2 style='color:{colour}'>Daily customer check — {headline}</h2>
+      <p>{item_count} customer comments scanned over the last {days} days.
+         {len(incidents)} open issue(s): {p0} P0, {p1} P1.</p>
+      {table}
+      <p style='color:#888;font-size:12px;margin-top:20px'>
+        Source health: {health}<br>
+        This email sends every day even when nothing is wrong — if it stops
+        arriving, the monitor itself has a problem.<br>
+        Review text is not reachable by API. US+ Health &middot; {dt.date.today()}
+      </p>
+    </body></html>"""
+    return subject, html, f"Daily customer check — {headline}", blocks
+
+
+def run(days: int = LOOKBACK_DAYS, report_only: bool = False, digest: bool = False):
     print("=== Voice-of-Customer Monitor ===")
     print(f"  Window: last {days} days")
 
-    items = voc_from_returns(days) + voc_from_messages(days)
-    print(f"  {len(items)} customer text item(s) collected.")
+    # Track per-source reachability so the digest can distinguish "nothing to
+    # report" from "this source stopped answering".
+    sources_ok = {}
+    try:
+        returns_items = voc_from_returns(days)
+        sources_ok["returns"] = True
+    except Exception as e:
+        print(f"  Returns source FAILED — {e}")
+        returns_items, sources_ok["returns"] = [], False
+
+    message_items, sources_ok["messages"] = voc_from_messages(days)
+
+    items = returns_items + message_items
+    print(f"  {len(items)} customer text item(s) collected "
+          f"({len(returns_items)} returns, {len(message_items)} messages).")
 
     suppressed = 0
     kept = []
@@ -496,6 +592,15 @@ def run(days: int = LOOKBACK_DAYS, report_only: bool = False):
         seen.add(item["key"])
     state["seen"] = list(seen)
 
+    if digest:
+        # Always sends, including on an all-clear day. That is the point: a
+        # daily heartbeat means a monitor that dies stops being invisible.
+        subject, html, slack_text, slack_blocks = _build_digest(
+            incidents, fresh, len(items), days, sources_ok, suppressed)
+        send_alert(subject, html, slack_text, slack_blocks)
+        save_state(state)
+        return
+
     if not state.get("seeded"):
         state["seeded"] = True
         save_state(state)
@@ -520,6 +625,8 @@ if __name__ == "__main__":
                         help="Render alerts without sending or saving state")
     parser.add_argument("--report", action="store_true",
                         help="Print an analysis to stdout; send nothing")
+    parser.add_argument("--digest", action="store_true",
+                        help="Daily heartbeat: always send, even on an all-clear day")
     args = parser.parse_args()
 
     if args.dry_run:
@@ -527,4 +634,4 @@ if __name__ == "__main__":
         save_state = lambda _s: print("  State: DRY RUN — not saved")  # noqa: E731
         print("*** DRY RUN — nothing will be sent or saved ***")
 
-    run(days=args.days, report_only=args.report)
+    run(days=args.days, report_only=args.report, digest=args.digest)

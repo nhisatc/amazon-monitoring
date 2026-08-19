@@ -5,16 +5,24 @@ permissions:
 
 on:
   schedule:
-    # Twice daily. This digests and clusters rather than reporting per event,
-    # so it needs a window of complaints to see a pattern in — running it more
-    # often would just split one incident across several alerts.
+    # Incident checks — fire only when something new appears. Twice daily,
+    # because this clusters complaints and needs a window to see a pattern in.
     - cron: '0 2,14 * * *'
+    # Daily heartbeat at 01:00 UTC = 09:00 Asia/Singapore. Sends EVERY day,
+    # including all-clear ones. Without it, a dead monitor and a quiet week
+    # look identical — which is how buyer alerts stayed broken for two months
+    # and review alerts for three.
+    - cron: '0 1 * * *'
   workflow_dispatch:
     inputs:
       days:
         description: 'Lookback window in days'
         type: string
         default: '7'
+      digest:
+        description: 'Daily digest mode — always sends, even on an all-clear day'
+        type: boolean
+        default: false
       dry_run:
         description: 'Preview only — send nothing, save no state'
         type: boolean
@@ -61,6 +69,7 @@ jobs:
         run: |
           python voc_monitor.py \
             --days ${{ inputs.days || '7' }} \
+            ${{ (github.event.schedule == '0 1 * * *' || inputs.digest) && '--digest' || '' }} \
             ${{ inputs.dry_run && '--dry-run' || '' }}
 
       - name: Commit state
