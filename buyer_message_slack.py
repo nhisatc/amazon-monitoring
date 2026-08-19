@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
-from alerts import send_alert  # noqa: E402  (must follow load_dotenv)
+from alerts import post_slack  # noqa: E402  (must follow load_dotenv)
 
 GMAIL_ADDRESS = os.environ["GMAIL_ADDRESS"]
 GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
@@ -77,27 +77,13 @@ def parse_buyer_message(msg):
     }
 
 
-def _build_email(parsed):
-    subject = f"Buyer message: {parsed['message_type']} (Order {parsed['order_id']})"
-    html = f"""
-    <html><body style='font-family:Arial,sans-serif;color:#333;max-width:700px'>
-      <h2 style='color:#2980b9'>New Amazon buyer message</h2>
-      <div style='border:1px solid #2980b9;border-radius:6px;padding:16px;background:#f8fbff'>
-        <p style='margin:0 0 6px'><strong>Type:</strong> {parsed['message_type']}</p>
-        <p style='margin:0 0 12px'><strong>Order ID:</strong> {parsed['order_id']}</p>
-        <p style='margin:0;padding:12px;background:#fff;border-left:3px solid #2980b9;
-                  white-space:pre-wrap'>{parsed['buyer_message']}</p>
-      </div>
-      <p style='margin-top:16px'>
-        <a href='https://sellercentral.amazon.com/messaging/inbox'>Reply in Seller Central</a>
-        &mdash; Amazon expects a response within 24 hours.
-      </p>
-    </body></html>"""
-    return subject, html
-
-
 def notify(parsed):
-    """Send one buyer message to Slack and email. True if either landed."""
+    """
+    Post one buyer message to Slack. Slack only, by design — these run every
+    5 minutes and would flood inboxes. Returns and review alerts still go to
+    both channels. (An HTML email body for these lived here until 2026-08-20;
+    recover it from git history if that changes.)
+    """
     blocks = [
         {
             "type": "header",
@@ -139,21 +125,18 @@ def notify(parsed):
         },
     ]
 
-    subject, html = _build_email(parsed)
-    result = send_alert(
-        subject=subject,
-        body_html=html,
-        slack_text=f"New Amazon Buyer Message - Order {parsed['order_id']}",
-        slack_blocks=blocks,
+    delivered = post_slack(
+        text=f"New Amazon Buyer Message - Order {parsed['order_id']}",
+        blocks=blocks,
     )
 
-    # Mark as processed if either channel delivered, so a single failing
-    # channel does not cause the message to be re-alerted forever.
-    delivered = result["slack"] or result["email"]
+    # Only mark processed once Slack has actually accepted it. Slack is now the
+    # sole channel, so a failure here means nobody saw the message — retry on
+    # the next run rather than losing it.
     if delivered:
         print(f"  Notified: Order {parsed['order_id']}")
     else:
-        print(f"  Both channels failed for Order {parsed['order_id']} — will retry next run")
+        print(f"  Slack delivery failed for Order {parsed['order_id']} — will retry next run")
     return delivered
 
 

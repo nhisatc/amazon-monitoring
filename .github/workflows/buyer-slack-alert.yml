@@ -35,9 +35,11 @@ jobs:
 
       - name: Check and post buyer messages
         env:
+          # Read-side only: this is the mailbox Amazon delivers buyer messages
+          # to. No mail is sent from here — buyer alerts go to Slack alone, so
+          # ALERT_RECIPIENTS and the SMTP_FROM_* pair are deliberately absent.
           GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          ALERT_RECIPIENTS:   ${{ secrets.ALERT_RECIPIENTS }}
           SLACK_BOT_TOKEN:    ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID:   ${{ secrets.SLACK_CHANNEL_ID }}
         run: python buyer_message_slack.py --once
