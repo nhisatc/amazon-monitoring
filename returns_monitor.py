@@ -314,7 +314,15 @@ def _build_slack(quality: list[dict], damage: list[dict], other_count: int) -> t
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def run():
+    from alerts import _recipients, _sender
+
     print("=== Returns Monitor (SP-API) ===")
+    # Print the routing every run. Misdirected alerts are otherwise invisible
+    # until someone notices they stopped arriving.
+    print(f"  Alerts route to Slack + email from {_sender()[0] or '(unset)'}")
+    for r in _recipients():
+        print(f"    -> {r}")
+
     state = load_state()
     seen  = set(state.get("seen", []))
 
