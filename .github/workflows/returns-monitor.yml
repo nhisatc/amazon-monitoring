@@ -45,6 +45,8 @@ jobs:
           MARKETPLACE_ID:       ${{ secrets.MARKETPLACE_ID }}
           GMAIL_ADDRESS:        ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD:   ${{ secrets.GMAIL_APP_PASSWORD }}
+          SMTP_FROM_ADDRESS:    ${{ secrets.SMTP_FROM_ADDRESS }}
+          SMTP_FROM_PASSWORD:   ${{ secrets.SMTP_FROM_PASSWORD }}
           ALERT_RECIPIENTS:     ${{ secrets.ALERT_RECIPIENTS }}
           SLACK_BOT_TOKEN:      ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID:     ${{ secrets.SLACK_CHANNEL_ID }}

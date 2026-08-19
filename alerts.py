@@ -56,6 +56,16 @@ def _sender() -> tuple[str, str, str]:
     from_password = os.environ.get("SMTP_FROM_PASSWORD")
 
     if from_password:                      # route A
+        if not os.environ.get("SMTP_FROM_ADDRESS"):
+            # A password for an account we were never told the name of. Falling
+            # back to GMAIL_ADDRESS here would try that password against the
+            # wrong account and fail auth on every send, so say so plainly.
+            raise RuntimeError(
+                "SMTP_FROM_PASSWORD is set but SMTP_FROM_ADDRESS is not. "
+                "The app password belongs to a specific account — set "
+                "SMTP_FROM_ADDRESS to that address, or unset SMTP_FROM_PASSWORD "
+                "to send via the existing GMAIL_* login."
+            )
         return from_address, from_address, from_password
     return from_address, login_user, login_password   # route B
 
