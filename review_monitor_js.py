@@ -25,7 +25,7 @@ from junglescout import ClientSync
 from junglescout.models.parameters.marketplace import Marketplace
 
 import config
-from mailer import send_alert
+from alerts import send_alert
 
 SNAPSHOT_FILE = os.path.join(config.DATA_DIR, "review_snapshots.json")
 
@@ -51,8 +51,15 @@ ALL_ASINS = [
 
 UNINDEXED_ASINS = [asin for asin in ALL_ASINS if asin not in INDEXED_ASINS]
 
-RATING_DROP_THRESHOLD  = 0.2   # alert if rating drops by this much
+# Jungle Scout reports rating to one decimal, so 0.1 is the smallest drop that
+# is observable at all. The old 0.2 threshold discarded half the usable signal.
+RATING_DROP_THRESHOLD  = 0.1
 LOW_RATING_THRESHOLD   = 3.5   # alert if rating is at or below this
+
+# Above roughly this many reviews, one 1-star moves the average by less than
+# the 0.05 needed to change the reported first decimal — the ASIN is
+# effectively blind to individual bad reviews via this method.
+BLIND_ABOVE_REVIEWS = 400
 
 
 # ── Snapshot storage ───────────────────────────────────────────────────────────
@@ -227,19 +234,57 @@ def _build_email(alerts: list[dict]) -> tuple[str, str]:
     return subject, html
 
 
+def _build_slack(alerts: list[dict]) -> tuple[str, list]:
+    blocks = [{
+        "type": "header",
+        "text": {
+            "type": "plain_text",
+            "text": f"⭐ Possible low review — {len(alerts)} ASIN(s)",
+            "emoji": True,
+        },
+    }]
+
+    for a in alerts:
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    f"*{a['title'][:80]}*\n"
+                    f"`{a['asin']}` · Rating {a['prev_rating']} → *{a['cur_rating']}* "
+                    f"· Reviews {a['prev_reviews']} → {a['cur_reviews']}\n"
+                    f"_{a['reason']}_\n"
+                    f"<https://www.amazon.com/dp/{a['asin']}|Open listing>"
+                ),
+            },
+        })
+
+    blocks.append({
+        "type": "context",
+        "elements": [{
+            "type": "mrkdwn",
+            "text": (
+                "Derived from the aggregate rating — the exact review is not visible here. "
+                "Check the listing, then try Feedback Manager before offering a refund."
+            ),
+        }],
+    })
+
+    return f"Possible low review on {len(alerts)} ASIN(s) — US+ Health", blocks
+
+
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def run():
     print("=== Review Monitor (Jungle Scout) ===")
     snapshots = load_snapshots()
 
-    print(f"Monitoring {len(INDEXED_ASINS)} indexed ASINs (out of {len(ALL_ASINS)} total)")
-    if UNINDEXED_ASINS:
-        print(f"  Note: {len(UNINDEXED_ASINS)} ASINs not in Jungle Scout database (new/niche/not yet indexed)")
-
-    print(f"Fetching review data via Jungle Scout…")
-    current = fetch_product_data(INDEXED_ASINS)
-    print(f"  Got data for {len(current)} ASINs.")
+    # Attempt every ASIN, not just the eight that happened to resolve back in
+    # May. Coverage changes over time; ones that return nothing are simply
+    # skipped, so trying costs a failed lookup and gains any newly-indexed ASIN.
+    print(f"Fetching review data via Jungle Scout for all {len(ALL_ASINS)} ASINs…")
+    current = fetch_product_data(ALL_ASINS)
+    print(f"  Got data for {len(current)} of {len(ALL_ASINS)} ASINs.")
 
     alerts = detect_review_changes(current, snapshots)
 
@@ -247,9 +292,18 @@ def run():
     snapshots.update(current)
     save_snapshots(snapshots)
 
+    blind = [a for a in current if current[a].get("reviews", 0) > BLIND_ABOVE_REVIEWS]
+    print(f"  {len(blind)} ASIN(s) have too many reviews for a single 1-star to be visible.")
+
     if alerts:
         subject, html = _build_email(alerts)
-        send_alert(subject=subject, body_html=html)
+        slack_text, slack_blocks = _build_slack(alerts)
+        send_alert(
+            subject=subject,
+            body_html=html,
+            slack_text=slack_text,
+            slack_blocks=slack_blocks,
+        )
         print(f"Alert sent for {len(alerts)} ASIN(s).")
     else:
         print("No rating drops or new low-star activity detected.")

@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
+from alerts import send_alert  # noqa: E402  (must follow load_dotenv)
+
 GMAIL_ADDRESS = os.environ["GMAIL_ADDRESS"]
 GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
@@ -75,7 +77,27 @@ def parse_buyer_message(msg):
     }
 
 
-def post_to_slack(parsed):
+def _build_email(parsed):
+    subject = f"Buyer message: {parsed['message_type']} (Order {parsed['order_id']})"
+    html = f"""
+    <html><body style='font-family:Arial,sans-serif;color:#333;max-width:700px'>
+      <h2 style='color:#2980b9'>New Amazon buyer message</h2>
+      <div style='border:1px solid #2980b9;border-radius:6px;padding:16px;background:#f8fbff'>
+        <p style='margin:0 0 6px'><strong>Type:</strong> {parsed['message_type']}</p>
+        <p style='margin:0 0 12px'><strong>Order ID:</strong> {parsed['order_id']}</p>
+        <p style='margin:0;padding:12px;background:#fff;border-left:3px solid #2980b9;
+                  white-space:pre-wrap'>{parsed['buyer_message']}</p>
+      </div>
+      <p style='margin-top:16px'>
+        <a href='https://sellercentral.amazon.com/messaging/inbox'>Reply in Seller Central</a>
+        &mdash; Amazon expects a response within 24 hours.
+      </p>
+    </body></html>"""
+    return subject, html
+
+
+def notify(parsed):
+    """Send one buyer message to Slack and email. True if either landed."""
     blocks = [
         {
             "type": "header",
@@ -117,29 +139,30 @@ def post_to_slack(parsed):
         },
     ]
 
-    resp = requests.post(
-        "https://slack.com/api/chat.postMessage",
-        headers={
-            "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
-            "Content-Type": "application/json; charset=utf-8",
-        },
-        json={
-            "channel": SLACK_CHANNEL_ID,
-            "text": f"New Amazon Buyer Message - Order {parsed['order_id']}",
-            "blocks": blocks,
-        },
+    subject, html = _build_email(parsed)
+    result = send_alert(
+        subject=subject,
+        body_html=html,
+        slack_text=f"New Amazon Buyer Message - Order {parsed['order_id']}",
+        slack_blocks=blocks,
     )
-    data = resp.json()
-    if not data.get("ok"):
-        print(f"Slack error: {data.get('error')}")
+
+    # Mark as processed if either channel delivered, so a single failing
+    # channel does not cause the message to be re-alerted forever.
+    delivered = result["slack"] or result["email"]
+    if delivered:
+        print(f"  Notified: Order {parsed['order_id']}")
     else:
-        print(f"Posted to Slack: Order {parsed['order_id']}")
-    return data.get("ok", False)
+        print(f"  Both channels failed for Order {parsed['order_id']} — will retry next run")
+    return delivered
 
 
 def check_new_messages():
     state = load_state()
-    processed = set(state["processed_ids"][-500:])
+    # Keep insertion order so the trim below drops the OLDEST ids, not
+    # arbitrary ones — a plain set would make the [-500:] window meaningless.
+    processed_ids = state.get("processed_ids", [])
+    processed = set(processed_ids)
 
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     mail.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
@@ -161,13 +184,14 @@ def check_new_messages():
 
         parsed = parse_buyer_message(msg)
         if parsed["buyer_message"]:
-            if post_to_slack(parsed):
+            if notify(parsed):
                 processed.add(msg_id)
+                processed_ids.append(msg_id)
                 new_count += 1
 
     mail.logout()
 
-    state["processed_ids"] = list(processed)
+    state["processed_ids"] = processed_ids[-500:]
     save_state(state)
     return new_count
 

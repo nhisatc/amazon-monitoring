@@ -1,7 +1,20 @@
-name: Amazon Buyer Message → Slack
+name: Amazon Buyer Message → Slack + Email
+
+permissions:
+  contents: write
 
 on:
-  workflow_dispatch:  # Manual only — replaced by Google Apps Script
+  schedule:
+    # Every 5 minutes. GitHub's scheduler is best-effort and can drift under
+    # load, so treat this as "within ~5-15 min" rather than exact.
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+# Never let two runs overlap — both would read the same unprocessed mail and
+# double-post before either had written state back.
+concurrency:
+  group: buyer-message-alert
+  cancel-in-progress: false
 
 jobs:
   check-buyer-messages:
@@ -22,10 +35,11 @@ jobs:
 
       - name: Check and post buyer messages
         env:
-          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          ALERT_RECIPIENTS:   ${{ secrets.ALERT_RECIPIENTS }}
+          SLACK_BOT_TOKEN:    ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID:   ${{ secrets.SLACK_CHANNEL_ID }}
         run: python buyer_message_slack.py --once
 
       - name: Commit state
@@ -33,5 +47,14 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add data/
-          git commit -m "Auto: buyer slack state updated" || echo "No changes"
-          git push
+          git diff --staged --quiet && echo "No changes" && exit 0
+          git commit -m "Auto: buyer alert state updated"
+          # Four workflows write to data/; rebase onto whatever landed first
+          # rather than failing the run on a non-fast-forward push.
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin main && git push && exit 0
+            echo "Push race, retry $i"
+            sleep 5
+          done
+          echo "Could not push state after 3 attempts" >&2
+          exit 1

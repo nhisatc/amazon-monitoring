@@ -2,3 +2,7 @@
 __pycache__/
 *.pyc
 backfill_real_data.py
+
+# Contains a live Slack bot token in plaintext — this repo is PUBLIC.
+# Move the token to Apps Script "Script Properties" before tracking this.
+buyer_slack_apps_script.js
