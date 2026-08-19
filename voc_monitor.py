@@ -75,6 +75,11 @@ THEMES = {
                     r"mould\w*|chunk\w*|debris|cloudy|murky|contaminat\w*|"
                     r"sewage|slime|film|growth|black spot\w*|dirty)\b",
     },
+    "expiry": {
+        "label": "Expired / date issue",
+        "patterns": r"\b(expir\w*|out of date|past (the )?date|best before|"
+                    r"use by|old stock|shelf life)\b",
+    },
     "odor": {
         "label": "Smell / odour",
         "patterns": r"\b(smell\w*|odou?r\w*|stink\w*|rancid|sour|foul|"
@@ -117,11 +122,36 @@ THEMES = {
 # these escalates; the softer themes only ever inform.
 CRITICAL_THEMES = {"safety", "contamination"}
 
+# Damage in transit is a fulfilment problem, not a formulation one. Leaking and
+# broken seals overwhelmingly originate in FBA handling and shipping, so they
+# are counted and reported as a total but never raised as product-quality
+# issues — otherwise they crowd out the complaints that point at what is
+# actually in the bottle. Set VOC_INCLUDE_LOGISTICS=1 to fold them back in.
+LOGISTICS_THEMES = {"leak"}
+
+
+def logistics_included() -> bool:
+    return os.environ.get("VOC_INCLUDE_LOGISTICS", "").strip().lower() in ("1", "true", "yes")
+
 # Reasons that already signal a product fault, used to weight returns.
 QUALITY_REASONS = {
     "DEFECTIVE", "NOT_AS_DESCRIBED", "QUALITY_UNACCEPTABLE",
     "MISSING_PARTS", "NOT_COMPATIBLE",
 }
+
+# Only these justify calling a comment-less return a defect. NOT_AS_DESCRIBED
+# and NOT_COMPATIBLE are routinely chosen by buyers who simply changed their
+# mind, so treating them as faults inflated the defect counts with people who
+# just did not want the product.
+HARD_QUALITY_REASONS = {"DEFECTIVE", "QUALITY_UNACCEPTABLE", "MISSING_PARTS"}
+
+# Buyer wording that rules a return OUT as a quality problem, whatever code
+# Amazon filed it under.
+CHANGE_OF_MIND = re.compile(
+    r"(changed?\s*mind|don'?t need|do not need|no longer need|not what i "
+    r"(was looking|wanted|expected|pictured)|bought (the )?wrong|ordered .{0,20}"
+    r"(by )?mistake|my needs changed|not for me|found a better price|"
+    r"too (expensive|big|small)|decided to go)", re.I)
 
 
 def _compiled():
@@ -208,9 +238,18 @@ def voc_from_returns(days: int) -> list[dict]:
         name = row.get("product-name", "")
         themes = classify(comment)
 
-        # A DEFECTIVE return with no words still counts as a quality signal.
-        if not themes and reason in QUALITY_REASONS:
-            themes = {"unspecified_defect"}
+        # Drop returns whose wording says the buyer simply changed their mind,
+        # regardless of the code Amazon filed them under.
+        if comment and CHANGE_OF_MIND.search(comment) and not (themes & CRITICAL_THEMES):
+            continue
+
+        # A comment-less return only counts as a defect under a hard quality
+        # code — see HARD_QUALITY_REASONS.
+        if not themes:
+            if reason in HARD_QUALITY_REASONS:
+                themes = {"unspecified_defect"}
+            else:
+                continue
 
         items.append({
             "date":    row.get("return-date", "")[:10],
@@ -306,7 +345,7 @@ def voc_from_messages(days: int) -> tuple[list[dict], bool]:
 
 # Most-serious-first. A comment is filed under exactly one of these, so the
 # same words never spawn two incidents.
-THEME_PRIORITY = ("safety", "contamination", "odor", "leak",
+THEME_PRIORITY = ("safety", "contamination", "expiry", "odor", "leak",
                   "not_as_described", "efficacy", "consistency",
                   "unspecified_defect")
 
@@ -611,7 +650,17 @@ def run(days: int = LOOKBACK_DAYS, report_only: bool = False, digest: bool = Fal
     if suppressed:
         print(f"  {suppressed} castor-oil odour mention(s) suppressed.")
 
-    incidents = build_incidents(kept)
+    all_incidents = build_incidents(kept)
+
+    if logistics_included():
+        incidents, logistics = all_incidents, []
+    else:
+        incidents = [i for i in all_incidents if i["theme"] not in LOGISTICS_THEMES]
+        logistics = [i for i in all_incidents if i["theme"] in LOGISTICS_THEMES]
+        if logistics:
+            shipped = sum(i["count"] for i in logistics)
+            print(f"  {shipped} leak/seal report(s) held back as shipping damage, "
+                  f"not product quality ({len(logistics)} product(s)).")
     print(f"  {len(incidents)} incident(s): "
           f"{sum(1 for i in incidents if i['severity']=='P0')} P0, "
           f"{sum(1 for i in incidents if i['severity']=='P1')} P1, "
