@@ -97,6 +97,10 @@ THEMES = {
                     r"(ordered|expected)|misleading|wrong (item|product|size)|"
                     r"mislabel\w*|fake|counterfeit)\b",
     },
+    "unspecified_defect": {
+        "label": "Defective (no detail given)",
+        "patterns": r"(?!x)x",   # never matches text; assigned from return reason
+    },
     "consistency": {
         # Anchored to explicit product-property complaints. Bare "thick"/"thin"
         # matched delivery chatter, so they need a subject to attach to.
@@ -300,6 +304,21 @@ def voc_from_messages(days: int) -> tuple[list[dict], bool]:
 
 # ── Incident detection ─────────────────────────────────────────────────────────
 
+# Most-serious-first. A comment is filed under exactly one of these, so the
+# same words never spawn two incidents.
+THEME_PRIORITY = ("safety", "contamination", "odor", "leak",
+                  "not_as_described", "efficacy", "consistency",
+                  "unspecified_defect")
+
+
+def primary_theme(themes: set[str]) -> str | None:
+    """The single most serious theme a comment matched, or None."""
+    for theme in THEME_PRIORITY:
+        if theme in themes:
+            return theme
+    return None
+
+
 def build_incidents(items: list[dict]) -> list[dict]:
     """
     Group by (product, theme). One complaint is an anecdote; the same complaint
@@ -308,38 +327,61 @@ def build_incidents(items: list[dict]) -> list[dict]:
     """
     buckets = collections.defaultdict(list)
     for item in items:
-        for theme in item["themes"]:
-            if theme == "unspecified_defect":
-                continue
-            buckets[(item["product"] or item["asin"] or "unknown", theme)].append(item)
+        # File each comment under ONE theme — its most serious. Filing it under
+        # every theme it matched made a single message appear as several
+        # separate incidents: the June peroxide comment mentioning an odour and
+        # being "not comfortable" surfaced as both an odour issue and a
+        # contamination issue, doubling the apparent problem count.
+        theme = primary_theme(item["themes"])
+        if not theme:
+            continue
+        buckets[(item["product"] or item["asin"] or "unknown", theme)].append(item)
 
     incidents = []
     for (product, theme), group in buckets.items():
-        distinct_orders = {g["order"] for g in group if g["order"]}
+        # Collapse repeat contact about the same order. One customer emailing
+        # four times about one leaking bottle is one complaint, not four — the
+        # old count reported "5 reports / 2 orders", inflating a two-customer
+        # problem into something that looked five times worse.
+        by_order = collections.defaultdict(list)
+        loose = []
+        for g in group:
+            (by_order[g["order"]] if g["order"] else loose).append(g)
+
+        deduped = [max(v, key=lambda g: len(g["text"] or "")) for v in by_order.values()]
+        deduped += loose
+        deduped.sort(key=lambda g: g["date"], reverse=True)
+
+        customers = len(deduped)
         skus = {g["sku"] for g in group if g["sku"]}
         critical = theme in CRITICAL_THEMES
 
         if critical:
-            severity = "P0" if len(group) >= 2 else "P1"
-        elif len(group) >= 3:
+            severity = "P0" if customers >= 2 else "P1"
+        elif customers >= 3:
             severity = "P1"
-        elif len(group) >= 2:
+        elif customers >= 2:
             severity = "P2"
         else:
-            continue  # single non-critical mention is noise
+            # Previously dropped. A lone complaint is not noise — it is one
+            # customer with a problem, and discarding it meant most of the
+            # collected feedback never reached anyone. Ranked below clusters,
+            # never hidden.
+            severity = "P3"
 
         incidents.append({
             "product":  product,
             "theme":    theme,
             "label":    THEMES[theme]["label"],
-            "count":    len(group),
-            "orders":   len(distinct_orders),
+            "count":    customers,          # distinct customers, not raw messages
+            "contacts": len(group),         # total messages, for context
+            "orders":   len(by_order),
             "skus":     sorted(skus),
             "severity": severity,
-            "items":    sorted(group, key=lambda g: g["date"], reverse=True),
+            "items":    deduped,
         })
 
-    order = {"P0": 0, "P1": 1, "P2": 2}
+    order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
     incidents.sort(key=lambda i: (order[i["severity"]], -i["count"]))
     return incidents
 
@@ -362,7 +404,7 @@ def save_state(state: dict):
 
 # ── Rendering ──────────────────────────────────────────────────────────────────
 
-SEV_EMOJI = {"P0": "🔴", "P1": "🟠", "P2": "🟡"}
+SEV_EMOJI = {"P0": "🔴", "P1": "🟠", "P2": "🟡", "P3": "⚪"}
 
 
 def _build_slack(incidents: list[dict], suppressed: int) -> tuple[str, list]:
@@ -406,7 +448,7 @@ def _build_email(incidents: list[dict], suppressed: int, days: int) -> tuple[str
     subject = (f"{'URGENT: ' if p0 else ''}Customer feedback — "
                f"{len(incidents)} issue(s) across {days}d")
 
-    colours = {"P0": "#c0392b", "P1": "#e67e22", "P2": "#f1c40f"}
+    colours = {"P0": "#c0392b", "P1": "#e67e22", "P2": "#f1c40f", "P3": "#95a5a6"}
     cards = ""
     for inc in incidents:
         accent = colours[inc["severity"]]
