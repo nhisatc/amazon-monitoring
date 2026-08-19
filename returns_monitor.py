@@ -364,4 +364,11 @@ def run():
 
 
 if __name__ == "__main__":
+    import sys
+    if "--dry-run" in sys.argv:
+        os.environ["ALERT_DRY_RUN"] = "1"
+        # Don't persist state in a dry run, or the returns you just previewed
+        # would be marked as seen and never alerted for real.
+        save_state = lambda _state: print("  State: DRY RUN — not saved")  # noqa: E731
+        print("*** DRY RUN — nothing will be sent or saved ***")
     run()

@@ -322,4 +322,9 @@ def run():
 
 
 if __name__ == "__main__":
+    import sys
+    if "--dry-run" in sys.argv:
+        os.environ["ALERT_DRY_RUN"] = "1"
+        save_snapshots = lambda _data: print("  Snapshots: DRY RUN — not saved")  # noqa: E731
+        print("*** DRY RUN — nothing will be sent or saved ***")
     run()

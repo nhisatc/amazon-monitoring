@@ -210,7 +210,13 @@ def run_loop():
 
 if __name__ == "__main__":
     import sys
-    if "--once" in sys.argv:
+    if "--dry-run" in sys.argv:
+        os.environ["ALERT_DRY_RUN"] = "1"
+        # Same reasoning as the returns monitor: previewing must not consume
+        # the message ids, or the real run would skip them as already-sent.
+        save_state = lambda _state: print("  State: DRY RUN — not saved")  # noqa: E731
+        print("*** DRY RUN — nothing will be sent or saved ***")
+    if "--once" in sys.argv or "--dry-run" in sys.argv:
         n = check_new_messages()
         print(f"Done. Posted {n} new message(s).")
     else:

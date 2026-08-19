@@ -28,6 +28,28 @@ def _recipients() -> list[str]:
     return [r.strip() for r in raw.split(",") if r.strip()]
 
 
+def _sender() -> tuple[str, str]:
+    """
+    The account alerts are sent FROM.
+
+    Deliberately separate from GMAIL_ADDRESS, which is the mailbox the buyer
+    message monitor logs into to READ Amazon's messages. Those two are not the
+    same account: Amazon delivers to the Gmail address, but alerts should come
+    from the company address. Overloading one variable for both would point the
+    reader at an empty mailbox.
+
+    Falls back to the reading account when no separate sender is configured, so
+    existing setups keep working unchanged.
+    """
+    address  = os.environ.get("SMTP_FROM_ADDRESS")  or os.environ.get("GMAIL_ADDRESS", "")
+    password = os.environ.get("SMTP_FROM_PASSWORD") or os.environ.get("GMAIL_APP_PASSWORD", "")
+    return address, password
+
+
+def is_dry_run() -> bool:
+    return os.environ.get("ALERT_DRY_RUN", "").strip().lower() in ("1", "true", "yes")
+
+
 def post_slack(text: str, blocks: list | None = None) -> bool:
     """Post to the team channel. Returns True on success."""
     token   = os.environ.get("SLACK_BOT_TOKEN", "")
@@ -39,6 +61,15 @@ def post_slack(text: str, blocks: list | None = None) -> bool:
     payload = {"channel": channel, "text": text}
     if blocks:
         payload["blocks"] = blocks
+
+    if is_dry_run():
+        print(f"  Slack: DRY RUN — would post to {channel}: {text}")
+        for block in (blocks or []):
+            if block.get("type") == "section":
+                body = block.get("text", {}).get("text", "")
+                if body:
+                    print("          | " + body.replace("\n", "\n          | "))
+        return True
 
     try:
         resp = requests.post(
@@ -66,22 +97,26 @@ def post_slack(text: str, blocks: list | None = None) -> bool:
 def send_email(subject: str, body_html: str, recipients: list[str] | None = None) -> bool:
     """Send the HTML alert email. Returns True on success."""
     recipients = recipients or _recipients()
-    gmail_address  = os.environ.get("GMAIL_ADDRESS", "")
-    gmail_password = os.environ.get("GMAIL_APP_PASSWORD", "")
-    if not gmail_address or not gmail_password:
+    from_address, from_password = _sender()
+    if not from_address or not from_password:
         print("  Email: not configured, skipping")
         return False
 
+    if is_dry_run():
+        print(f"  Email: DRY RUN — would send '{subject}'")
+        print(f"          from {from_address} to {', '.join(recipients)}")
+        return True
+
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"]    = gmail_address
+    msg["From"]    = from_address
     msg["To"]      = ", ".join(recipients)
     msg.attach(MIMEText(body_html, "html"))
 
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(gmail_address, gmail_password)
-            server.sendmail(gmail_address, recipients, msg.as_string())
+            server.login(from_address, from_password)
+            server.sendmail(from_address, recipients, msg.as_string())
     except Exception as e:
         print(f"  Email: send failed — {e}")
         return False
