@@ -18,7 +18,7 @@ on:
       days:
         description: 'Lookback window in days'
         type: string
-        default: '7'
+        default: '2'
       digest:
         description: 'Daily digest mode — always sends, even on an all-clear day'
         type: boolean
@@ -68,7 +68,7 @@ jobs:
           JUNGLE_SCOUT_API_KEY:      ${{ secrets.JUNGLE_SCOUT_API_KEY }}
         run: |
           python voc_monitor.py \
-            --days ${{ inputs.days || '7' }} \
+            --days ${{ inputs.days || '2' }} \
             ${{ (github.event.schedule == '0 1 * * *' || inputs.digest) && '--digest' || '' }} \
             ${{ inputs.dry_run && '--dry-run' || '' }}
 

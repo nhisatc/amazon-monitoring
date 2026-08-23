@@ -1,6 +1,7 @@
 import imaplib
 import email
 import re
+import hashlib
 import json
 import os
 import time
@@ -140,12 +141,29 @@ def notify(parsed):
     return delivered
 
 
+def content_fingerprint(parsed):
+    """
+    Identify a buyer message by what it SAYS, not which email carried it.
+
+    Amazon re-sends the same buyer message as separate emails with different
+    Message-IDs — order 111-6982615-2011414 arrived twice, 26 minutes apart,
+    identical text — so a Message-ID key alerted once per copy. Hashing the
+    order plus the normalised message body collapses those duplicates while
+    still letting a genuine follow-up (different words) through.
+    """
+    body = re.sub(r"\s+", " ", (parsed.get("buyer_message") or "")).strip().lower()
+    basis = f"{parsed.get('order_id', '')}|{body}"
+    return hashlib.sha1(basis.encode("utf-8")).hexdigest()
+
+
 def check_new_messages():
     state = load_state()
     # Keep insertion order so the trim below drops the OLDEST ids, not
     # arbitrary ones — a plain set would make the [-500:] window meaningless.
     processed_ids = state.get("processed_ids", [])
     processed = set(processed_ids)
+    fingerprints = state.get("fingerprints", [])
+    seen_content = set(fingerprints)
 
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     mail.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
@@ -167,14 +185,27 @@ def check_new_messages():
 
         parsed = parse_buyer_message(msg)
         if parsed["buyer_message"]:
+            fingerprint = content_fingerprint(parsed)
+            if fingerprint in seen_content:
+                # Amazon resent a message we have already alerted on. Record the
+                # id so we stop re-examining it, but stay quiet.
+                print(f"  Duplicate of an already-alerted message "
+                      f"(order {parsed['order_id']}) — not re-posting")
+                processed.add(msg_id)
+                processed_ids.append(msg_id)
+                continue
+
             if notify(parsed):
                 processed.add(msg_id)
                 processed_ids.append(msg_id)
+                seen_content.add(fingerprint)
+                fingerprints.append(fingerprint)
                 new_count += 1
 
     mail.logout()
 
     state["processed_ids"] = processed_ids[-500:]
+    state["fingerprints"]  = fingerprints[-500:]
     save_state(state)
     return new_count
 

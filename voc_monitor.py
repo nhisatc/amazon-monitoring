@@ -53,7 +53,7 @@ from returns_monitor import fetch_returns  # noqa: E402
 DATA_DIR   = os.path.join(os.path.dirname(__file__), "data")
 STATE_FILE = os.path.join(DATA_DIR, "voc_state.json")
 
-LOOKBACK_DAYS = 7
+LOOKBACK_DAYS = 2
 
 
 # ── Themes ─────────────────────────────────────────────────────────────────────
