@@ -49,11 +49,13 @@
     "<010001a02f05776f-90448cdc-d337-44fa-ab9d-093cca24438a-000000@email.amazonses.com>",
     "<010001a033460177-31f3c871-6e44-407b-bc15-37d2518a9102-000000@email.amazonses.com>",
     "<010001a03490dd88-6751663d-9f43-4d90-b8b2-a29bb3bb4aac-000000@email.amazonses.com>",
-    "<010001a034e56070-9a17c4a5-3e81-4761-b47e-ae4522bb32c3-000000@email.amazonses.com>"
+    "<010001a034e56070-9a17c4a5-3e81-4761-b47e-ae4522bb32c3-000000@email.amazonses.com>",
+    "<010001a035052ec5-19828dc8-7ab2-4ecf-a95f-a01e72af6fdc-000000@email.amazonses.com>"
   ],
   "fingerprints": [
     "f1a8ce9b0b254955ee3a75f2f400f1e6b455afa3",
     "aaaa8acc3a75474df94de4723ec45cefcaeafd25",
-    "f8917e48271ff69860814cd8e194fc511cd2b46d"
+    "f8917e48271ff69860814cd8e194fc511cd2b46d",
+    "3ab9b262735868dcc0548e33b007c430a3793335"
   ]
 }
