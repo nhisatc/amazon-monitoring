@@ -78,19 +78,27 @@ def parse_buyer_message(msg):
     }
 
 
-def notify(parsed):
+def notify(parsed, thread_ts=None):
     """
     Post one buyer message to Slack. Slack only, by design — these run every
     5 minutes and would flood inboxes. Returns and review alerts still go to
     both channels. (An HTML email body for these lived here until 2026-08-20;
     recover it from git history if that changes.)
+
+    When thread_ts is given the message is posted as a reply inside that
+    thread. A customer conversation is a back-and-forth — order
+    111-5359978-8095453 sent three messages in two hours, ending with "Okay
+    thank you!" — and each one used to notify the whole channel separately.
+    Threading keeps the follow-ups readable in context without re-pinging.
     """
+    header = (":speech_balloon: Follow-up from buyer" if thread_ts
+              else ":package: New Amazon Buyer Message")
     blocks = [
         {
             "type": "header",
             "text": {
                 "type": "plain_text",
-                "text": ":package: New Amazon Buyer Message",
+                "text": header,
                 "emoji": True,
             },
         },
@@ -129,13 +137,15 @@ def notify(parsed):
     delivered = post_slack(
         text=f"New Amazon Buyer Message - Order {parsed['order_id']}",
         blocks=blocks,
+        thread_ts=thread_ts,
     )
 
     # Only mark processed once Slack has actually accepted it. Slack is now the
     # sole channel, so a failure here means nobody saw the message — retry on
     # the next run rather than losing it.
     if delivered:
-        print(f"  Notified: Order {parsed['order_id']}")
+        kind = "Threaded follow-up" if thread_ts else "Notified"
+        print(f"  {kind}: Order {parsed['order_id']}")
     else:
         print(f"  Slack delivery failed for Order {parsed['order_id']} — will retry next run")
     return delivered
@@ -164,6 +174,8 @@ def check_new_messages():
     processed = set(processed_ids)
     fingerprints = state.get("fingerprints", [])
     seen_content = set(fingerprints)
+    # order id -> Slack ts of the message that opened that conversation
+    threads = state.get("threads", {})
 
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     mail.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
@@ -195,17 +207,27 @@ def check_new_messages():
                 processed_ids.append(msg_id)
                 continue
 
-            if notify(parsed):
+            # Everything about one order belongs in one Slack thread. The first
+            # message opens it; later ones reply inside it.
+            order = parsed.get("order_id") or "Unknown"
+            parent_ts = threads.get(order) if order != "Unknown" else None
+
+            result = notify(parsed, thread_ts=parent_ts)
+            if result:
                 processed.add(msg_id)
                 processed_ids.append(msg_id)
                 seen_content.add(fingerprint)
                 fingerprints.append(fingerprint)
+                if order != "Unknown" and not parent_ts and isinstance(result, str):
+                    threads[order] = result
                 new_count += 1
 
     mail.logout()
 
     state["processed_ids"] = processed_ids[-500:]
     state["fingerprints"]  = fingerprints[-500:]
+    # Bound the thread map the same way, keeping the most recently opened.
+    state["threads"] = dict(list(threads.items())[-300:])
     save_state(state)
     return new_count
 

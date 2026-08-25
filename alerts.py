@@ -75,8 +75,17 @@ def is_dry_run() -> bool:
     return os.environ.get("ALERT_DRY_RUN", "").strip().lower() in ("1", "true", "yes")
 
 
-def post_slack(text: str, blocks: list | None = None) -> bool:
-    """Post to the team channel. Returns True on success."""
+def post_slack(text: str, blocks: list | None = None,
+               thread_ts: str | None = None) -> str | bool:
+    """
+    Post to the team channel.
+
+    Returns the message timestamp on success (falsy on failure), so callers can
+    thread later messages under it. Pass thread_ts to reply inside an existing
+    thread instead of posting to the channel — a threaded reply does not
+    re-notify the channel, which is how a customer's follow-up messages stay
+    visible without pinging everyone again.
+    """
     token   = os.environ.get("SLACK_BOT_TOKEN", "")
     channel = os.environ.get("SLACK_CHANNEL_ID", "")
     if not token or not channel:
@@ -86,15 +95,18 @@ def post_slack(text: str, blocks: list | None = None) -> bool:
     payload = {"channel": channel, "text": text}
     if blocks:
         payload["blocks"] = blocks
+    if thread_ts:
+        payload["thread_ts"] = thread_ts
 
     if is_dry_run():
-        print(f"  Slack: DRY RUN — would post to {channel}: {text}")
+        where = f"thread {thread_ts}" if thread_ts else channel
+        print(f"  Slack: DRY RUN — would post to {where}: {text}")
         for block in (blocks or []):
             if block.get("type") == "section":
                 body = block.get("text", {}).get("text", "")
                 if body:
                     print("          | " + body.replace("\n", "\n          | "))
-        return True
+        return "dry-run-ts"
 
     try:
         resp = requests.post(
@@ -115,8 +127,8 @@ def post_slack(text: str, blocks: list | None = None) -> bool:
         print(f"  Slack error: {data.get('error')}")
         return False
 
-    print("  Slack: posted")
-    return True
+    print(f"  Slack: {'replied in thread' if thread_ts else 'posted'}")
+    return data.get("ts") or True
 
 
 def verify_smtp_login() -> bool:
