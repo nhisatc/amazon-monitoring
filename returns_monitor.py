@@ -23,6 +23,7 @@ import gzip
 import hashlib
 import json
 import os
+import re
 import time
 
 import requests
@@ -211,6 +212,83 @@ def save_state(state: dict):
 
 # ── Formatting ─────────────────────────────────────────────────────────────────
 
+# Dropdown answers Amazon collects alongside the free-text box. On their own
+# they carry no information about what was actually wrong.
+_FILLER = {
+    "", "no", "yes", "n/a", "na", "none", "nothing", "idk", "i don't know",
+    "i didn't know how to answer", "no reason given", "not applicable",
+}
+
+
+def has_substantive_comment(row: dict) -> bool:
+    """
+    True when the buyer actually described the problem.
+
+    Most quality returns arrive with an empty comment — the buyer chose
+    "Defective" from a menu and typed nothing. Alerting on those tells the team
+    a return happened but nothing they can act on, so they are counted instead.
+    A comment that merely echoes the reason code, or is a bare yes/no answer to
+    Amazon's follow-up questions, counts as empty too.
+    """
+    raw = (row.get("customer-comments") or "").strip()
+    if not raw:
+        return False
+
+    reason_words = {
+        row.get("reason", "").replace("_", " ").lower().strip(),
+        _label(row.get("reason", "")).lower().strip(),
+    }
+
+    for part in raw.split("|"):
+        cleaned = re.sub(r"\s+", " ", part).strip().lower().rstrip(".")
+        if cleaned in _FILLER or cleaned in reason_words:
+            continue
+        if len(cleaned) >= 4:          # anything with real words in it
+            return True
+    return False
+
+
+# Wording that describes transit or handling damage. Buyers often file these
+# under DEFECTIVE, so the reason code alone is not enough to keep shipment
+# problems out of a product-quality alert.
+_SHIPMENT_LANGUAGE = re.compile(
+    r"(box|package|packaging) (was |came |arrived )?(dented|crushed|damaged|open|torn|wet)"
+    r"|arrived (damaged|broken|leaking|open|wet)"
+    r"|(bottle|container|cap|lid|seal) (was |is )?(damaged|broken|cracked|loose|leaking|not sealed)"
+    r"|broken seal|leak\w*|spill\w*|crushed|dented",
+    re.I,
+)
+
+# Wording that describes the product itself. If any of this is present the
+# complaint is about what is in the bottle, whatever else it mentions.
+_PRODUCT_LANGUAGE = re.compile(
+    r"(smell\w*|odou?r\w*|stink\w*|rancid|sour|sulphur|sulfur|foam\w*|"
+    r"float\w*|particle\w*|specks?|flakes?|gunk|chunk\w*|sediment|mold\w*|"
+    r"cloudy|murky|contaminat\w*|expir\w*|rash|itch\w*|burn\w*|irritat\w*|"
+    r"colou?r|texture|consistency|separat\w*|didn'?t work|does ?n'?t work|"
+    r"not 100|bad quality|poor quality)",
+    re.I,
+)
+
+
+def is_shipment_issue(row: dict) -> bool:
+    """
+    True when the complaint is really about transit damage.
+
+    Amazon's shipping and handling problems are not product-quality problems,
+    and mixing them in buries the complaints that point at what is actually in
+    the bottle. A comment that mentions damage AND a product symptom still
+    counts as product quality — "it leaked and smells of sulphur" is a
+    formulation signal that happens to also have leaked.
+    """
+    comment = (row.get("customer-comments") or "")
+    if not comment:
+        return False
+    if _PRODUCT_LANGUAGE.search(comment):
+        return False
+    return bool(_SHIPMENT_LANGUAGE.search(comment))
+
+
 def _grade(reason: str) -> str:
     if reason in QUALITY_REASONS:
         return "quality"
@@ -388,6 +466,22 @@ def run():
     if stale_quality or stale_damage:
         print(f"  {stale_quality + stale_damage} back-filled return(s) older than "
               f"{MAX_ALERT_AGE_DAYS}d not alerted.")
+
+    # A bare "Defective" with no explanation is a statistic, not an alert.
+    described = [r for r in quality if has_substantive_comment(r)]
+    silent = len(quality) - len(described)
+    if silent:
+        print(f"  {silent} quality return(s) with no buyer comment not alerted.")
+        other += silent
+
+    # Transit damage filed under a quality code is still transit damage.
+    product = [r for r in described if not is_shipment_issue(r)]
+    shipping = len(described) - len(product)
+    if shipping:
+        print(f"  {shipping} return(s) describing shipping damage not alerted "
+              f"(Amazon handling, not product quality).")
+        other += shipping
+    quality = product
 
     if not damage_included() and damage:
         print(f"  {len(damage)} damage return(s) held back as shipping damage, "
