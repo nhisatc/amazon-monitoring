@@ -1,0 +1,55 @@
+name: Send Team Announcement
+
+# Manual only. Sends a one-off message to ALERT_RECIPIENTS from
+# SMTP_FROM_ADDRESS, so team mail never goes out from a personal mailbox.
+
+on:
+  workflow_dispatch:
+    inputs:
+      subject:
+        description: 'Subject line'
+        type: string
+        required: true
+      body:
+        description: 'Message body (plain text)'
+        type: string
+        required: true
+      dry_run:
+        description: 'Preview only — send nothing'
+        type: boolean
+        default: true
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests python-dotenv
+
+      - name: Write body to file
+        env:
+          BODY: ${{ inputs.body }}
+        run: printf '%s' "$BODY" > announcement.txt
+
+      - name: Send
+        env:
+          SMTP_FROM_ADDRESS:  ${{ secrets.SMTP_FROM_ADDRESS }}
+          SMTP_FROM_PASSWORD: ${{ secrets.SMTP_FROM_PASSWORD }}
+          GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          ALERT_RECIPIENTS:   ${{ secrets.ALERT_RECIPIENTS }}
+        run: |
+          python send_announcement.py \
+            --subject "${{ inputs.subject }}" \
+            --body-file announcement.txt \
+            ${{ inputs.dry_run && '--dry-run' || '' }}
