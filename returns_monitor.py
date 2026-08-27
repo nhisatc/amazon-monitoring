@@ -50,10 +50,24 @@ QUALITY_REASONS = {
     "APPAREL_STYLE",
 }
 
+# Damage in transit or at the fulfilment centre is a logistics problem, not a
+# formulation one. These are counted in the summary line but never alerted —
+# the VOC monitor treats leaking the same way, and this file was inconsistent
+# with it until 2026-08-27. Set RETURNS_INCLUDE_DAMAGE=1 to fold them back in.
 DAMAGE_REASONS = {
     "DAMAGED_BY_FC",
     "DAMAGED_BY_CARRIER",
 }
+
+
+def damage_included() -> bool:
+    return os.environ.get("RETURNS_INCLUDE_DAMAGE", "").strip().lower() in ("1", "true", "yes")
+
+
+# Amazon back-fills this report, so a return can first appear days after it
+# happened. Quality signals are still worth seeing late, but past this age they
+# are history rather than news — counted, not alerted.
+MAX_ALERT_AGE_DAYS = 5
 
 REASON_LABELS = {
     "DEFECTIVE":            "Defective",
@@ -360,6 +374,26 @@ def run():
     other   = len(new_rows) - len(quality) - len(damage)
 
     print(f"  New: {len(quality)} quality, {len(damage)} damage, {other} other.")
+
+    # Drop rows that surfaced late enough to be history rather than news.
+    cutoff = (dt.datetime.now(dt.timezone.utc)
+              - dt.timedelta(days=MAX_ALERT_AGE_DAYS)).strftime("%Y-%m-%d")
+
+    def recent(rows):
+        fresh_rows = [r for r in rows if r.get("return-date", "")[:10] >= cutoff]
+        return fresh_rows, len(rows) - len(fresh_rows)
+
+    quality, stale_quality = recent(quality)
+    damage,  stale_damage  = recent(damage)
+    if stale_quality or stale_damage:
+        print(f"  {stale_quality + stale_damage} back-filled return(s) older than "
+              f"{MAX_ALERT_AGE_DAYS}d not alerted.")
+
+    if not damage_included() and damage:
+        print(f"  {len(damage)} damage return(s) held back as shipping damage, "
+              f"not product quality.")
+        other += len(damage)
+        damage = []
 
     if not quality and not damage:
         save_state(state)
