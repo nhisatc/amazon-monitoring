@@ -10,6 +10,11 @@ def send_alert(subject: str, body_html: str, recipients: list[str] = None):
         "max@usplushealth.com",
         "julian@usplushealth.com",
         "hedda@usplushealth.com",
+        "lou@usplushealth.com",
+        "lloyd@usplushealth.com",
+        "mitchie@usplushealth.com",
+        "rea@usplushealth.com",
+        "stella@usplushealth.com",
     ]
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
