@@ -289,6 +289,45 @@ def is_shipment_issue(row: dict) -> bool:
     return bool(_SHIPMENT_LANGUAGE.search(comment))
 
 
+# Wording that says the buyer simply did not want the product. Amazon still
+# lets them pick a quality code on the way out, so "Not as described" and
+# "Not compatible" routinely arrive attached to "ordered the wrong size" —
+# a preference, not a fault. Kept identical to CHANGE_OF_MIND in
+# voc_monitor.py so both alerts agree on what counts as a complaint.
+_CHANGE_OF_MIND = re.compile(
+    r"(chang\w*\s+(my|his|her|their)\s+mind|changed?\s*mind|"
+    r"ordered?\s+(the\s+)?wrong|my (mistake|error|bad)|"
+    r"don'?t need|do not need|no longer need|not what i "
+    r"(was looking|wanted|expected|pictured)|bought (the )?wrong|ordered .{0,20}"
+    r"(by )?mistake|my needs changed|not for me|found a better price|"
+    r"too (expensive|big|small)|decided to go)", re.I)
+
+# The same call made from the return code instead of the buyer's wording.
+# [\s_] throughout: Amazon supplies these both as codes (ORDERED_WRONG_ITEM)
+# and as display text ("Ordering Issue - Ordered wrong item").
+_BUYER_ERROR_REASON = re.compile(
+    r"(ordered?[\s_]*(the[\s_]*)?wrong|wrong[\s_]*(item|product|size)|"
+    r"ordering[\s_]*issue|accidental|unwanted|no[\s_]*longer[\s_]*needed|"
+    r"found[\s_]*(a[\s_]*)?better[\s_]*price)", re.I)
+
+
+def is_change_of_mind(row: dict) -> bool:
+    """
+    True when the buyer simply did not want the product.
+
+    These are not quality signals: the team cannot act on someone deciding a
+    gallon was too big. A described product symptom overrides the call, the
+    same way it overrides shipment damage — "wrong size and it smells of
+    sulphur" is still a formulation signal that happens to also be a return.
+    """
+    comment = (row.get("customer-comments") or "")
+    if comment and _PRODUCT_LANGUAGE.search(comment):
+        return False
+    if comment and _CHANGE_OF_MIND.search(comment):
+        return True
+    return bool(_BUYER_ERROR_REASON.search(row.get("reason", "")))
+
+
 def _grade(reason: str) -> str:
     if reason in QUALITY_REASONS:
         return "quality"
@@ -482,6 +521,15 @@ def run():
               f"(Amazon handling, not product quality).")
         other += shipping
     quality = product
+
+    # A buyer who decided they did not want it is not reporting a fault.
+    faults = [r for r in quality if not is_change_of_mind(r)]
+    mind = len(quality) - len(faults)
+    if mind:
+        print(f"  {mind} return(s) where the buyer changed their mind not alerted "
+              f"(preference, not product quality).")
+        other += mind
+    quality = faults
 
     if not damage_included() and damage:
         print(f"  {len(damage)} damage return(s) held back as shipping damage, "

@@ -35,6 +35,34 @@ def save_state(state):
         json.dump(state, f, indent=2)
 
 
+def strip_volatile(text):
+    """
+    Remove the parts of an email body that change between two deliveries of the
+    same buyer message.
+
+    Amazon's "Re:" template has no --- Message: --- delimiters, so the parser
+    below falls back to raw body text. That raw text carries a tracking URL and
+    the quoted history of the thread, both of which differ per send — which is
+    how order 111-6982615-2011414 was posted twice on 2026-08-25 (08:08 and
+    17:46) with two different fingerprints. Cutting the quoted tail and the
+    URLs leaves just what the buyer actually wrote.
+
+    Deliberately conservative: it strips containers, never words. Two genuinely
+    different messages still hash differently, so real follow-ups get through.
+    """
+    # Cut everything from the first reply marker onward — that is quoted history.
+    text = re.split(
+        r"\n\s*(?:-{2,}\s*Original Message\s*-{2,}"
+        r"|On .{0,120}\bwrote:"
+        r"|From:\s|Sent:\s|_{5,}|={5,})",
+        text,
+        maxsplit=1,
+    )[0]
+    text = re.sub(r"^\s*>.*$", "", text, flags=re.MULTILINE)   # quoted lines
+    text = re.sub(r"https?://\S+", "", text)                   # tracking links
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def parse_buyer_message(msg):
     subject = str(email.header.make_header(email.header.decode_header(msg["Subject"])))
     sender = msg["From"]
@@ -68,7 +96,7 @@ def parse_buyer_message(msg):
     if match:
         buyer_msg = match.group(1).strip()
     elif body:
-        buyer_msg = body[:500]
+        buyer_msg = strip_volatile(body)[:500]
 
     return {
         "order_id": order_id,
@@ -161,9 +189,19 @@ def content_fingerprint(parsed):
     order plus the normalised message body collapses those duplicates while
     still letting a genuine follow-up (different words) through.
     """
-    body = re.sub(r"\s+", " ", (parsed.get("buyer_message") or "")).strip().lower()
+    body = strip_volatile(parsed.get("buyer_message") or "").lower()
     basis = f"{parsed.get('order_id', '')}|{body}"
     return hashlib.sha1(basis.encode("utf-8")).hexdigest()
+
+
+def legacy_fingerprint(parsed):
+    """
+    The pre-2026-08-27 hash, kept only so the state file's existing entries
+    still match. Without it, every message already alerted on would hash
+    differently under the new rules and post a second time on the next run.
+    """
+    body = re.sub(r"\s+", " ", (parsed.get("buyer_message") or "")).strip().lower()
+    return hashlib.sha1(f"{parsed.get('order_id', '')}|{body}".encode("utf-8")).hexdigest()
 
 
 def check_new_messages():
@@ -198,7 +236,7 @@ def check_new_messages():
         parsed = parse_buyer_message(msg)
         if parsed["buyer_message"]:
             fingerprint = content_fingerprint(parsed)
-            if fingerprint in seen_content:
+            if fingerprint in seen_content or legacy_fingerprint(parsed) in seen_content:
                 # Amazon resent a message we have already alerted on. Record the
                 # id so we stop re-examining it, but stay quiet.
                 print(f"  Duplicate of an already-alerted message "

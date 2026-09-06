@@ -199,14 +199,23 @@ def send_alert(
     slack_text: str,
     slack_blocks: list | None = None,
     recipients: list[str] | None = None,
+    email: bool = True,
+    slack: bool = True,
 ) -> dict:
     """
     Deliver one alert to both channels.
 
     Each channel is attempted independently so a Slack outage never
     suppresses the email, and vice versa.
+
+    Pass email=False to post to Slack only. The daily digest uses this on a
+    quiet day: the heartbeat still has to fire so a dead monitor stays
+    visible, but "nothing new" does not need to reach eight inboxes.
+
+    Pass slack=False for the reverse — the weekly roundup email, whose contents
+    Slack has already seen day by day.
     """
     return {
-        "slack": post_slack(slack_text, slack_blocks),
-        "email": send_email(subject, body_html, recipients),
+        "slack": post_slack(slack_text, slack_blocks) if slack else None,
+        "email": send_email(subject, body_html, recipients) if email else None,
     }

@@ -13,6 +13,10 @@ on:
     # look identical — which is how buyer alerts stayed broken for two months
     # and review alerts for three.
     - cron: '0 1 * * *'
+    # Weekly roundup email, Mondays 03:00 UTC = 11:00 Asia/Singapore. This is
+    # the only routine email now — the daily runs above post to Slack and only
+    # reach an inbox for a P0/P1 that cannot wait for this.
+    - cron: '0 3 * * 1'
   workflow_dispatch:
     inputs:
       days:
@@ -21,6 +25,10 @@ on:
         default: '2'
       digest:
         description: 'Daily digest mode — always sends, even on an all-clear day'
+        type: boolean
+        default: false
+      weekly:
+        description: 'Weekly roundup email (email only; forces a 7-day window)'
         type: boolean
         default: false
       dry_run:
@@ -68,7 +76,8 @@ jobs:
           JUNGLE_SCOUT_API_KEY:      ${{ secrets.JUNGLE_SCOUT_API_KEY }}
         run: |
           python voc_monitor.py \
-            --days ${{ inputs.days || '2' }} \
+            --days ${{ (github.event.schedule == '0 3 * * 1' || inputs.weekly) && '7' || inputs.days || '2' }} \
+            ${{ (github.event.schedule == '0 3 * * 1' || inputs.weekly) && '--weekly' || '' }} \
             ${{ (github.event.schedule == '0 1 * * *' || inputs.digest) && '--digest' || '' }} \
             ${{ inputs.dry_run && '--dry-run' || '' }}
 

@@ -148,10 +148,25 @@ HARD_QUALITY_REASONS = {"DEFECTIVE", "QUALITY_UNACCEPTABLE", "MISSING_PARTS"}
 # Buyer wording that rules a return OUT as a quality problem, whatever code
 # Amazon filed it under.
 CHANGE_OF_MIND = re.compile(
-    r"(changed?\s*mind|don'?t need|do not need|no longer need|not what i "
+    r"(chang\w*\s+(my|his|her|their)\s+mind|changed?\s*mind|"
+    r"ordered?\s+(the\s+)?wrong|my (mistake|error|bad)|"
+    r"don'?t need|do not need|no longer need|not what i "
     r"(was looking|wanted|expected|pictured)|bought (the )?wrong|ordered .{0,20}"
     r"(by )?mistake|my needs changed|not for me|found a better price|"
     r"too (expensive|big|small)|decided to go)", re.I)
+
+
+# Reasons that put the fault in the order, not the bottle. A buyer who ordered
+# the wrong item tells us nothing about product quality, but the wording trips
+# the not_as_described theme ("wrong item"), which is how Castor Oil 10oz was
+# raised as an issue on 2026-08-27. Checked against the reason, not the
+# comment, so it holds whatever the buyer wrote.
+# [\s_] throughout: Amazon supplies these both as codes (ORDERED_WRONG_ITEM)
+# and as display text ("Ordering Issue · Ordered wrong item").
+BUYER_ERROR_REASON = re.compile(
+    r"(ordered?[\s_]*(the[\s_]*)?wrong|wrong[\s_]*(item|product|size)|"
+    r"ordering[\s_]*issue|accidental|unwanted|no[\s_]*longer[\s_]*needed|"
+    r"found[\s_]*(a[\s_]*)?better[\s_]*price)", re.I)
 
 
 def _compiled():
@@ -241,6 +256,10 @@ def voc_from_returns(days: int) -> list[dict]:
         # Drop returns whose wording says the buyer simply changed their mind,
         # regardless of the code Amazon filed them under.
         if comment and CHANGE_OF_MIND.search(comment) and not (themes & CRITICAL_THEMES):
+            continue
+
+        # Same call, made from the return code instead of the buyer's wording.
+        if reason and BUYER_ERROR_REASON.search(reason) and not (themes & CRITICAL_THEMES):
             continue
 
         # A comment-less return only counts as a defect under a hard quality
@@ -539,6 +558,98 @@ def _build_email(incidents: list[dict], suppressed: int, days: int) -> tuple[str
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
+def _build_weekly(incidents, item_count, days, sources_ok, suppressed):
+    """
+    The weekly roundup email.
+
+    Covers everything in the window, not just what is new since the last run:
+    this is the only routine email now, so it has to stand on its own. Slack
+    still carries the day-to-day, which is why this posts nowhere else.
+    """
+    order = ["P0", "P1", "P2", "P3"]
+    by_sev = {s: [i for i in incidents if i["severity"] == s] for s in order}
+
+    if by_sev["P0"]:
+        colour = "#c0392b"
+    elif by_sev["P1"]:
+        colour = "#e67e22"
+    elif incidents:
+        colour = "#f1c40f"
+    else:
+        colour = "#27ae60"
+
+    headline = (f"{len(incidents)} issue(s) over {days} days" if incidents
+                else f"No issues over {days} days")
+
+    sections = ""
+    for sev in order:
+        group = by_sev[sev]
+        if not group:
+            continue
+        rows = ""
+        for inc in group:
+            quote = next((i["text"] for i in inc["items"] if i["text"]), "")
+            sources = ", ".join(sorted({i.get("source", "?") for i in inc["items"]}))
+            rows += (
+                f"<tr><td style='padding:6px 10px;border-bottom:1px solid #eee'>{inc['label']}</td>"
+                f"<td style='padding:6px 10px;border-bottom:1px solid #eee'>{inc['product']}</td>"
+                f"<td style='padding:6px 10px;border-bottom:1px solid #eee'>{inc['count']}</td>"
+                f"<td style='padding:6px 10px;border-bottom:1px solid #eee'>{sources}</td></tr>"
+            )
+            if quote:
+                rows += (f"<tr><td colspan='4' style='padding:0 10px 10px;color:#555;"
+                         f"font-style:italic'>&ldquo;{quote[:300]}&rdquo;</td></tr>")
+        sections += (
+            f"<h3 style='margin:18px 0 6px'>{sev} — {len(group)} issue(s)</h3>"
+            f"<table style='border-collapse:collapse;width:100%;font-size:14px'>"
+            f"<tr style='background:#f5f5f5'>"
+            f"<th align='left' style='padding:6px 10px'>Theme</th>"
+            f"<th align='left' style='padding:6px 10px'>Product</th>"
+            f"<th align='left' style='padding:6px 10px'>Reports</th>"
+            f"<th align='left' style='padding:6px 10px'>Source</th></tr>{rows}</table>"
+        )
+
+    if not sections:
+        sections = "<p>No customer issues raised this week.</p>"
+
+    health = " · ".join(f"{'OK' if ok else 'FAILED'} {name}"
+                        for name, ok in sources_ok.items())
+    note = (f"<p style='color:#888;font-size:12px'>{suppressed} castor-oil odour "
+            f"mention(s) suppressed as a known characteristic.</p>" if suppressed else "")
+
+    subject = f"Weekly customer summary — {headline}"
+    html = f"""
+    <html><body style='font-family:Arial,sans-serif;color:#333;max-width:760px'>
+      <h2 style='color:{colour}'>Weekly customer summary</h2>
+      <p>{item_count} customer comment(s) scanned over the last {days} days.
+         {headline}.</p>
+      {sections}
+      {note}
+      <p style='color:#888;font-size:12px;margin-top:20px'>
+        Source health: {health}<br>
+        This is the weekly roundup. Urgent issues (P0/P1) are emailed as soon as
+        they appear; everything else waits for this. Day-to-day detail is in
+        Slack.<br>
+        Review text is not reachable by API. US+ Health &middot; {dt.date.today()}
+      </p>
+    </body></html>"""
+    return subject, html
+
+
+def _digest_itemises(incidents: list[dict]) -> list[dict]:
+    """
+    The incidents the digest spells out: those with at least one item that did
+    not come from a return.
+
+    Return-sourced issues are itemised by returns_monitor.py, with the order and
+    SKU the digest does not carry, so repeating their detail here is a second
+    copy of the same news. They still count everywhere. run() uses this to
+    decide whether the digest has anything worth emailing.
+    """
+    return [i for i in incidents
+            if any(it.get("source") != "return" for it in i["items"])]
+
+
 def _build_digest(incidents, fresh, item_count, days, sources_ok, suppressed):
     """
     The daily all-clear. Sends whether or not anything is wrong, because a
@@ -574,7 +685,14 @@ def _build_digest(incidents, fresh, item_count, days, sources_ok, suppressed):
         )}},
     ]
 
-    for inc in (fresh or incidents)[:6]:
+    # Only ever itemise what is NEW. An issue that is merely still open is
+    # already carried by the "N still open" count above — re-posting its detail
+    # every day reported one glycerin return three times over two days and
+    # trained everyone to skim past the digest.
+    new_here = _digest_itemises(fresh)
+    from_returns = len(fresh) - len(new_here)
+
+    for inc in new_here[:6]:
         quote = next((i["text"] for i in inc["items"] if i["text"]), "")
         blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": (
             f"{SEV_EMOJI[inc['severity']]} *{inc['label']}* — {inc['product']} "
@@ -582,11 +700,15 @@ def _build_digest(incidents, fresh, item_count, days, sources_ok, suppressed):
             + (f"\n> _{quote[:180]}_" if quote else "")
         )}})
 
+    if from_returns:
+        blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text":
+            f"{from_returns} new return-sourced issue(s) itemised in the returns alert."}]})
+
     blocks.append({"type": "context", "elements": [
         {"type": "mrkdwn", "text": f"Sources: {health} · Review text unavailable (Amazon sign-in wall)"}]})
 
     rows = ""
-    for inc in (fresh or incidents):
+    for inc in new_here:
         quote = next((i["text"] for i in inc["items"] if i["text"]), "")
         rows += (f"<tr><td style='padding:6px 10px;border-bottom:1px solid #eee'>"
                  f"<strong>{inc['severity']}</strong></td>"
@@ -601,7 +723,9 @@ def _build_digest(incidents, fresh, item_count, days, sources_ok, suppressed):
              f"<th align='left' style='padding:6px 10px'>Theme</th>"
              f"<th align='left' style='padding:6px 10px'>Product</th>"
              f"<th align='left' style='padding:6px 10px'>Reports</th></tr>{rows}</table>"
-             if rows else "<p>Nothing open.</p>")
+             if rows else (f"<p>No new issues. {len(incidents)} still open — "
+                           f"already reported when first seen.</p>"
+                           if incidents else "<p>Nothing open.</p>"))
 
     subject = f"Daily customer check — {headline}"
     html = f"""
@@ -620,7 +744,8 @@ def _build_digest(incidents, fresh, item_count, days, sources_ok, suppressed):
     return subject, html, f"Daily customer check — {headline}", blocks
 
 
-def run(days: int = LOOKBACK_DAYS, report_only: bool = False, digest: bool = False):
+def run(days: int = LOOKBACK_DAYS, report_only: bool = False, digest: bool = False,
+        weekly: bool = False):
     print("=== Voice-of-Customer Monitor ===")
     print(f"  Window: last {days} days")
 
@@ -675,6 +800,20 @@ def run(days: int = LOOKBACK_DAYS, report_only: bool = False, digest: bool = Fal
                     print(f"     [{item['date']} {item['source']}] {item['text'][:170]}")
         return
 
+    if weekly:
+        # Email only, and only when there is something to report. Slack has
+        # already carried each of these day by day.
+        #
+        # State is deliberately left untouched: the roundup reports on the
+        # window, it does not consume freshness the daily digest depends on.
+        if not incidents:
+            print("  Weekly roundup: no issues this week — not sending.")
+            return
+        subject, html = _build_weekly(
+            incidents, len(items), days, sources_ok, suppressed)
+        send_alert(subject, html, subject, None, slack=False)
+        return
+
     state = load_state()
     seen = set(state.get("seen", []))
     fresh = [i for i in incidents
@@ -688,7 +827,12 @@ def run(days: int = LOOKBACK_DAYS, report_only: bool = False, digest: bool = Fal
         # daily heartbeat means a monitor that dies stops being invisible.
         subject, html, slack_text, slack_blocks = _build_digest(
             incidents, fresh, len(items), days, sources_ok, suppressed)
-        send_alert(subject, html, slack_text, slack_blocks)
+        # Slack always gets the heartbeat. Email is reserved for issues that
+        # cannot wait for Monday's roundup — a safety or contamination report.
+        # Everything milder is in Slack today and in the weekly summary later,
+        # so emailing it here would be the third copy of the same news.
+        urgent = [i for i in fresh if i["severity"] in ("P0", "P1")]
+        send_alert(subject, html, slack_text, slack_blocks, email=bool(urgent))
         save_state(state)
         return
 
@@ -705,7 +849,9 @@ def run(days: int = LOOKBACK_DAYS, report_only: bool = False, digest: bool = Fal
 
     subject, html = _build_email(fresh, suppressed, days)
     slack_text, slack_blocks = _build_slack(fresh, suppressed)
-    send_alert(subject, html, slack_text, slack_blocks)
+    # Same rule as the digest: Slack now, inbox only if it cannot wait.
+    urgent = [i for i in fresh if i["severity"] in ("P0", "P1")]
+    send_alert(subject, html, slack_text, slack_blocks, email=bool(urgent))
     save_state(state)
 
 
@@ -718,6 +864,9 @@ if __name__ == "__main__":
                         help="Print an analysis to stdout; send nothing")
     parser.add_argument("--digest", action="store_true",
                         help="Daily heartbeat: always send, even on an all-clear day")
+    parser.add_argument("--weekly", action="store_true",
+                        help="Weekly roundup email covering the whole window; "
+                             "email only, sends nothing if the week was quiet")
     args = parser.parse_args()
 
     if args.dry_run:
@@ -725,4 +874,5 @@ if __name__ == "__main__":
         save_state = lambda _s: print("  State: DRY RUN — not saved")  # noqa: E731
         print("*** DRY RUN — nothing will be sent or saved ***")
 
-    run(days=args.days, report_only=args.report, digest=args.digest)
+    run(days=args.days, report_only=args.report, digest=args.digest,
+        weekly=args.weekly)
