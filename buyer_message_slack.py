@@ -7,7 +7,7 @@ import os
 import time
 import requests
 from datetime import datetime, timedelta, timezone
-from email.utils import parsedate_to_datetime
+from email.utils import parsedate_to_datetime, parseaddr
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
@@ -20,6 +20,11 @@ SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
 SLACK_CHANNEL_ID = os.environ.get("SLACK_CHANNEL_ID", "C0B995SHD9T")
 STATE_FILE = os.path.join(os.path.dirname(__file__), "data", "buyer_slack_state.json")
 POLL_INTERVAL = 120  # seconds
+
+# How long a buyer-keyed thread stays open. Orderless messages are threaded by
+# buyer (see thread_key), and a reply inside an old thread notifies nobody —
+# so a buyer who comes back weeks later gets a fresh top-level alert instead.
+BUYER_THREAD_DAYS = 7
 
 
 def load_state():
@@ -98,12 +103,61 @@ def parse_buyer_message(msg):
     elif body:
         buyer_msg = strip_volatile(body)[:500]
 
+    # Amazon's customer-service relays ("Order inquiry from Amazon customer
+    # Daniel") leave the order number out of the subject and put it in the
+    # body. Reading only the subject posted them as "Order ID: Unknown", which
+    # cannot be threaded — Daniel's leaking-gallon exchange on 2026-09-03/04
+    # arrived as two separate top-level alerts and read as a duplicate.
+    if order_id == "Unknown" and body:
+        in_body = re.search(r"Order\s*(?:number|ID|#)?[:\s#]*(\d{3}-\d{7}-\d{7})", body, re.I)
+        if in_body:
+            order_id = in_body.group(1)
+
     return {
         "order_id": order_id,
         "message_type": msg_type,
         "buyer_message": buyer_msg,
         "subject": subject,
+        "buyer": buyer_alias(msg),
     }
+
+
+def buyer_alias(msg):
+    """
+    Amazon's anonymised address for the buyer — the part before the "+" in
+    y22jb59cw6bmgyg+317f60a2-...@marketplace.amazon.com. The suffix changes
+    per message; the prefix stays with the buyer, so it links two messages
+    from one person when neither carries an order number.
+    """
+    addr = parseaddr(msg.get("Reply-To") or msg.get("From") or "")[1].lower()
+    local, _, domain = addr.partition("@")
+    if "+" not in local or not domain.endswith("marketplace.amazon.com"):
+        return ""
+    return local.split("+", 1)[0]
+
+
+def thread_key(parsed):
+    """
+    The Slack thread a message belongs in, as (key, is_buyer_key).
+
+    The order when there is one. Otherwise the buyer: product questions carry
+    no order at all, so the buyer's alias is the only thing tying a follow-up
+    to the question it follows.
+    """
+    order = parsed.get("order_id")
+    if order and order != "Unknown":
+        return order, False
+    if parsed.get("buyer"):
+        return f"buyer:{parsed['buyer']}", True
+    return None, False
+
+
+def _thread_is_fresh(ts):
+    try:
+        age = time.time() - float(ts)
+    except (TypeError, ValueError):
+        return True
+    return age < BUYER_THREAD_DAYS * 86400
 
 
 def notify(parsed, thread_ts=None):
@@ -246,9 +300,12 @@ def check_new_messages():
                 continue
 
             # Everything about one order belongs in one Slack thread. The first
-            # message opens it; later ones reply inside it.
-            order = parsed.get("order_id") or "Unknown"
-            parent_ts = threads.get(order) if order != "Unknown" else None
+            # message opens it; later ones reply inside it. Orderless messages
+            # thread by buyer instead, but only while that thread is recent.
+            key, by_buyer = thread_key(parsed)
+            parent_ts = threads.get(key) if key else None
+            if parent_ts and by_buyer and not _thread_is_fresh(parent_ts):
+                parent_ts = None
 
             result = notify(parsed, thread_ts=parent_ts)
             if result:
@@ -256,8 +313,13 @@ def check_new_messages():
                 processed_ids.append(msg_id)
                 seen_content.add(fingerprint)
                 fingerprints.append(fingerprint)
-                if order != "Unknown" and not parent_ts and isinstance(result, str):
-                    threads[order] = result
+                if not parent_ts and isinstance(result, str):
+                    # Register the new thread under the order AND the buyer, so
+                    # a follow-up that omits the order number still finds it.
+                    if key:
+                        threads[key] = result
+                    if parsed.get("buyer"):
+                        threads[f"buyer:{parsed['buyer']}"] = result
                 new_count += 1
 
     mail.logout()
@@ -293,5 +355,15 @@ if __name__ == "__main__":
     if "--once" in sys.argv or "--dry-run" in sys.argv:
         n = check_new_messages()
         print(f"Done. Posted {n} new message(s).")
-    else:
+    elif "--local-loop" in sys.argv:
         run_loop()
+    else:
+        # GitHub Actions is the only poster. A local loop keeps its own copy of
+        # the state file, which falls behind the one the workflow commits, so
+        # it re-posts everything the workflow has already sent. That is what
+        # run_buyer_slack.bat / .vbs did when launched with no arguments —
+        # they are left in place, but now stop here instead of duplicating.
+        print("Not starting a local polling loop: GitHub Actions posts buyer "
+              "messages. Use --once or --dry-run to test, or --local-loop if the "
+              "workflow schedule has been switched off.")
+        sys.exit(1)
