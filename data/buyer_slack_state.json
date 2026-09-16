@@ -80,7 +80,8 @@
     "<010001a0a08438d9-f4b08494-4558-4d37-b07f-c4eebdaf6822-000000@email.amazonses.com>",
     "<010001a0a0b3d81e-46fa19cc-7487-455c-9dd7-44c96425cde7-000000@email.amazonses.com>",
     "<010001a0a1033a19-4fe87840-fb66-4878-8514-a2e4b1afbdfb-000000@email.amazonses.com>",
-    "<010001a0a4ed221b-cfdfbd6d-869d-4d5c-b4df-464060137670-000000@email.amazonses.com>"
+    "<010001a0a4ed221b-cfdfbd6d-869d-4d5c-b4df-464060137670-000000@email.amazonses.com>",
+    "<010001a0a8c42f52-260d0df7-520a-4a85-93ab-a4bd0f059c0f-000000@email.amazonses.com>"
   ],
   "fingerprints": [
     "f1a8ce9b0b254955ee3a75f2f400f1e6b455afa3",
@@ -116,7 +117,8 @@
     "55908a50b66c242244909a4ebec2bce7e982f9bf",
     "345c256e9f7213533d95a978c258352c5763dbda",
     "16aaecb401653796c372b1f3fd73c37837c62ad8",
-    "a656ec4fd1a4ab23d581f6bf94b24cfb6afb31b0"
+    "a656ec4fd1a4ab23d581f6bf94b24cfb6afb31b0",
+    "1071a4eb3388c10b501893958873676740d798e0"
   ],
   "threads": {
     "111-6982615-2011414": "1787679981.600869",
