@@ -210,7 +210,11 @@ def notify(parsed, thread_ts=None):
             "elements": [
                 {
                     "type": "mrkdwn",
-                    "text": "Please check Seller Central and respond as soon as possible.",
+                    # The label marks this bot's posts. An old Apps Script copy
+                    # posted the same card with the same token, so duplicates
+                    # were indistinguishable; one without the label is not ours.
+                    "text": "Please check Seller Central and respond as soon as possible."
+                            "  ·  _Sent by the GitHub monitor_",
                 }
             ],
         },
