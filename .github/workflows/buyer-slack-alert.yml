@@ -4,10 +4,8 @@ permissions:
   contents: write
 
 on:
-  schedule:
-    # Every 5 minutes. GitHub's scheduler is best-effort and can drift under
-    # load, so treat this as "within ~5-15 min" rather than exact.
-    - cron: '*/5 * * * *'
+  # DISABLED — Google Apps Script handles buyer message alerts now.
+  # Do NOT re-enable the cron schedule; it causes duplicate Slack posts.
   workflow_dispatch:
 
 # Never let two runs overlap — both would read the same unprocessed mail and
