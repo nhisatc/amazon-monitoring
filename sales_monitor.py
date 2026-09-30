@@ -302,16 +302,31 @@ def _build_email(history: pd.DataFrame, alerts: list[dict]) -> str:
       <tbody>{rows}</tbody>
     </table>"""
 
+    earliest_date = datetime.date.fromisoformat(available_dates[0])
+
     mom_section = _period_section(
         "Monthly (MoM)",
         ref_date - datetime.timedelta(days=29), ref_date,
         ref_date - datetime.timedelta(days=59), ref_date - datetime.timedelta(days=30),
     )
-    yoy_section = _period_section(
-        "Yearly (YoY)",
-        ref_date - datetime.timedelta(days=364), ref_date,
-        ref_date - datetime.timedelta(days=729), ref_date - datetime.timedelta(days=365),
-    )
+
+    yoy_prev_start = ref_date - datetime.timedelta(days=729)
+    yoy_prev_end   = ref_date - datetime.timedelta(days=365)
+    if earliest_date > yoy_prev_end:
+        yoy_section = f"""
+    <h3 style='color:#2c3e50;margin-top:28px'>Yearly (YoY) Comparison</h3>
+    <p style='color:#888;font-size:12px;font-style:italic'>
+      Not enough history yet. YoY requires data from
+      {yoy_prev_start.strftime('%b %d, %Y')} – {yoy_prev_end.strftime('%b %d, %Y')},
+      but our history only starts {earliest_date.strftime('%b %d, %Y')}.
+      This section will populate automatically once 2 years of data are collected.
+    </p>"""
+    else:
+        yoy_section = _period_section(
+            "Yearly (YoY)",
+            ref_date - datetime.timedelta(days=364), ref_date,
+            yoy_prev_start, yoy_prev_end,
+        )
 
     return f"""
     <html><body style='font-family:Arial,sans-serif;color:#333'>
