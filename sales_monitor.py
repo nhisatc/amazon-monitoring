@@ -222,65 +222,96 @@ def _build_email(history: pd.DataFrame, alerts: list[dict]) -> str:
         prev_units = int(yday_totals.get(asin, 0))
         cur_rev    = today_revenue.get(asin, 0.0)
         prev_rev   = yday_revenue.get(asin, 0.0)
-        # Skip rows where both unit values are zero
         if cur_units == 0 and prev_units == 0:
             continue
         name = config.ASIN_NAMES.get(asin, asin)
         if prev_units > 0:
-            pct = (cur_units - prev_units) / prev_units
-            if abs(pct) >= config.SALES_THRESHOLD:
-                arrow = "▼" if pct < 0 else "▲"
-                col   = "#c0392b" if pct < 0 else "#27ae60"
-                chg   = f"<span style='color:{col};font-weight:bold'>{arrow} {abs(pct):.0%}</span>"
-            else:
-                chg = f"<span style='color:#888'>{pct:+.0%}</span>"
+            upct = (cur_units - prev_units) / prev_units
+            ua = "▼" if upct < 0 else "▲"
+            uc = "#c0392b" if upct < 0 else "#27ae60"
+            unit_chg = f"<span style='color:{uc};font-weight:bold'>{ua} {abs(upct):.0%}</span>" if abs(upct) >= config.SALES_THRESHOLD else f"<span style='color:#888'>{upct:+.0%}</span>"
         else:
-            chg = "<span style='color:#aaa'>—</span>"
+            unit_chg = "<span style='color:#aaa'>—</span>"
+        if prev_rev > 0:
+            rpct = (cur_rev - prev_rev) / prev_rev
+            ra = "▼" if rpct < 0 else "▲"
+            rc = "#c0392b" if rpct < 0 else "#27ae60"
+            rev_chg = f"<span style='color:{rc};font-weight:bold'>{ra} {abs(rpct):.0%}</span>" if abs(rpct) >= config.SALES_THRESHOLD else f"<span style='color:#888'>{rpct:+.0%}</span>"
+        else:
+            rev_chg = "<span style='color:#aaa'>—</span>"
         summary_rows += (
             f"<tr>"
             f"<td style='padding:5px 10px;border-bottom:1px solid #eee;font-size:12px;color:#555'>{name}</td>"
             f"<td style='padding:5px 10px;border-bottom:1px solid #eee;font-size:11px;color:#888'>{asin}</td>"
             f"<td style='padding:5px 10px;border-bottom:1px solid #eee;text-align:right'>{prev_units}<br><span style='color:#888;font-size:11px'>${prev_rev:,.2f}</span></td>"
             f"<td style='padding:5px 10px;border-bottom:1px solid #eee;text-align:right'>{cur_units}<br><span style='color:#888;font-size:11px'>${cur_rev:,.2f}</span></td>"
-            f"<td style='padding:5px 10px;border-bottom:1px solid #eee;text-align:right'>{chg}</td>"
+            f"<td style='padding:5px 10px;border-bottom:1px solid #eee;text-align:right'>{unit_chg}<br><span style='font-size:11px'>{rev_chg}</span></td>"
             f"</tr>"
         )
 
-    # Significant changes — weekly / monthly / yearly only
-    big_alerts = [a for a in alerts if a["window"] != "Daily"]
-    alert_rows = ""
-    for a in big_alerts:
-        color = "#c0392b" if a["direction"] == "drop" else "#27ae60"
-        arrow = "▼" if a["direction"] == "drop" else "▲"
-        name  = config.ASIN_NAMES.get(a["asin"], a["asin"])
-        alert_rows += (
-            f"<tr>"
-            f"<td style='padding:6px 10px;border-bottom:1px solid #eee;font-size:12px'>{name}"
-            f"<br><span style='color:#aaa;font-size:10px'>{a['asin']}</span></td>"
-            f"<td style='padding:6px 10px;border-bottom:1px solid #eee;font-size:12px'>{a['window']}"
-            f"<br><span style='color:#aaa;font-size:10px'>{a['cur_dates']} vs {a['prev_dates']}</span></td>"
-            f"<td style='padding:6px 10px;border-bottom:1px solid #eee;color:{color};font-weight:bold'>"
-            f"{arrow} {abs(a['pct']):.1%}</td>"
-            f"<td style='padding:6px 10px;border-bottom:1px solid #eee;font-size:12px'>"
-            f"{int(a['previous'])} → {int(a['current'])} units</td>"
-            f"</tr>"
-        )
-
-    alert_section = ""
-    if alert_rows:
-        alert_section = f"""
-    <h3 style='color:#e67e22;margin-top:28px'>Significant Changes (Weekly / Monthly / Yearly)</h3>
+    # MoM and YoY sections — always show all products
+    def _period_section(label, cur_start, cur_end, prev_start, prev_end):
+        u_cur  = _asin_totals(history, cur_start, cur_end)
+        u_prev = _asin_totals(history, prev_start, prev_end)
+        r_cur  = _asin_revenue(history, cur_start, cur_end)
+        r_prev = _asin_revenue(history, prev_start, prev_end)
+        asins  = sorted(set(config.ASIN_NAMES.keys()) | set(u_cur.index) | set(u_prev.index))
+        rows   = ""
+        for asin in asins:
+            uc = int(u_cur.get(asin, 0)); up = int(u_prev.get(asin, 0))
+            rc = r_cur.get(asin, 0.0);   rp = r_prev.get(asin, 0.0)
+            if uc == 0 and up == 0:
+                continue
+            name = config.ASIN_NAMES.get(asin, asin)
+            if up > 0:
+                upct = (uc - up) / up
+                ua = "▼" if upct < 0 else "▲"
+                col = "#c0392b" if upct < 0 else "#27ae60"
+                uchg = f"<span style='color:{col};font-weight:bold'>{ua} {abs(upct):.0%}</span>" if abs(upct) >= config.SALES_THRESHOLD else f"<span style='color:#888'>{upct:+.0%}</span>"
+            else:
+                uchg = "<span style='color:#aaa'>—</span>"
+            if rp > 0:
+                rpct = (rc - rp) / rp
+                ra = "▼" if rpct < 0 else "▲"
+                col = "#c0392b" if rpct < 0 else "#27ae60"
+                rchg = f"<span style='color:{col};font-weight:bold'>{ra} {abs(rpct):.0%}</span>" if abs(rpct) >= config.SALES_THRESHOLD else f"<span style='color:#888'>{rpct:+.0%}</span>"
+            else:
+                rchg = "<span style='color:#aaa'>—</span>"
+            rows += (
+                f"<tr>"
+                f"<td style='padding:5px 10px;border-bottom:1px solid #eee;font-size:12px;color:#555'>{name}</td>"
+                f"<td style='padding:5px 10px;border-bottom:1px solid #eee;font-size:11px;color:#888'>{asin}</td>"
+                f"<td style='padding:5px 10px;border-bottom:1px solid #eee;text-align:right'>{up}<br><span style='color:#888;font-size:11px'>${rp:,.2f}</span></td>"
+                f"<td style='padding:5px 10px;border-bottom:1px solid #eee;text-align:right'>{uc}<br><span style='color:#888;font-size:11px'>${rc:,.2f}</span></td>"
+                f"<td style='padding:5px 10px;border-bottom:1px solid #eee;text-align:right'>{uchg}<br><span style='font-size:11px'>{rchg}</span></td>"
+                f"</tr>"
+            )
+        date_range = f"{cur_start.strftime('%b %d')} – {cur_end.strftime('%b %d')} vs {prev_start.strftime('%b %d')} – {prev_end.strftime('%b %d')}"
+        return f"""
+    <h3 style='color:#2c3e50;margin-top:28px'>{label} Comparison <span style='font-weight:normal;font-size:12px;color:#888'>({date_range})</span></h3>
     <table style='border-collapse:collapse;width:100%;max-width:700px'>
       <thead>
         <tr style='background:#f0f0f0'>
           <th style='padding:7px 10px;text-align:left;font-size:12px'>Product</th>
-          <th style='padding:7px 10px;text-align:left;font-size:12px'>Window</th>
-          <th style='padding:7px 10px;text-align:left;font-size:12px'>Change</th>
-          <th style='padding:7px 10px;text-align:left;font-size:12px'>Units</th>
+          <th style='padding:7px 10px;text-align:left;font-size:12px'>ASIN</th>
+          <th style='padding:7px 10px;text-align:right;font-size:12px'>Previous<br><span style='font-weight:normal;color:#888'>units / $</span></th>
+          <th style='padding:7px 10px;text-align:right;font-size:12px'>Current<br><span style='font-weight:normal;color:#888'>units / $</span></th>
+          <th style='padding:7px 10px;text-align:right;font-size:12px'>Change<br><span style='font-weight:normal;color:#888'>units / $</span></th>
         </tr>
       </thead>
-      <tbody>{alert_rows}</tbody>
+      <tbody>{rows}</tbody>
     </table>"""
+
+    mom_section = _period_section(
+        "Monthly (MoM)",
+        ref_date - datetime.timedelta(days=29), ref_date,
+        ref_date - datetime.timedelta(days=59), ref_date - datetime.timedelta(days=30),
+    )
+    yoy_section = _period_section(
+        "Yearly (YoY)",
+        ref_date - datetime.timedelta(days=364), ref_date,
+        ref_date - datetime.timedelta(days=729), ref_date - datetime.timedelta(days=365),
+    )
 
     return f"""
     <html><body style='font-family:Arial,sans-serif;color:#333'>
@@ -296,12 +327,13 @@ def _build_email(history: pd.DataFrame, alerts: list[dict]) -> str:
           <th style='padding:7px 10px;text-align:left;font-size:12px'>ASIN</th>
           <th style='padding:7px 10px;text-align:right;font-size:12px'>Yesterday<br><span style='font-weight:normal;color:#888'>units / $</span></th>
           <th style='padding:7px 10px;text-align:right;font-size:12px'>Today<br><span style='font-weight:normal;color:#888'>units / $</span></th>
-          <th style='padding:7px 10px;text-align:right;font-size:12px'>Change</th>
+          <th style='padding:7px 10px;text-align:right;font-size:12px'>Change<br><span style='font-weight:normal;color:#888'>units / $</span></th>
         </tr>
       </thead>
       <tbody>{summary_rows}</tbody>
     </table>
-    {alert_section}
+    {mom_section}
+    {yoy_section}
     <p style='color:#aaa;font-size:11px;margin-top:24px'>
       Automated report from US+ Health Amazon Monitor · {datetime.date.today()}
     </p>
