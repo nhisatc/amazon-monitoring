@@ -49,18 +49,17 @@ def _marketplace():
     return Marketplaces.US
 
 
-def fetch_sales_report(date: datetime.date) -> pd.DataFrame:
-    """Request and download a single-day Sales & Traffic report."""
+def _request_report(start: datetime.date, end: datetime.date) -> pd.DataFrame:
+    """Core SP-API report fetch for a date range. Returns rows with no date set."""
     from sp_api.base.exceptions import SellingApiRequestThrottledException
     reports_api = Reports(credentials=config.SP_API_CREDENTIALS, marketplace=_marketplace(), verify=config.SSL_VERIFY)
 
-    # Retry up to 5 times on throttling with 60s backoff
     for attempt in range(5):
         try:
             response = reports_api.create_report(
                 reportType="GET_SALES_AND_TRAFFIC_REPORT",
-                dataStartTime=date.isoformat() + "T00:00:00Z",
-                dataEndTime=date.isoformat() + "T23:59:59Z",
+                dataStartTime=start.isoformat() + "T00:00:00Z",
+                dataEndTime=end.isoformat() + "T23:59:59Z",
                 reportOptions={"dateGranularity": "DAY", "asinGranularity": "CHILD"},
             )
             break
@@ -72,7 +71,6 @@ def fetch_sales_report(date: datetime.date) -> pd.DataFrame:
         raise RuntimeError("Exceeded retry limit due to rate limiting. Try again in 15 minutes.")
     report_id = response.payload["reportId"]
 
-    # Poll until the report is done (usually < 60 s)
     for _ in range(30):
         time.sleep(10)
         status = reports_api.get_report(report_id).payload
@@ -81,13 +79,10 @@ def fetch_sales_report(date: datetime.date) -> pd.DataFrame:
         if status["processingStatus"] in ("FATAL", "CANCELLED"):
             raise RuntimeError(f"Report {report_id} failed: {status['processingStatus']}")
 
-    doc_id   = status["reportDocumentId"]
-    doc     = reports_api.get_report_document(doc_id)
+    doc     = reports_api.get_report_document(status["reportDocumentId"])
     payload = doc.payload
-    doc_url = payload["url"]
     is_gzip = payload.get("compressionAlgorithm", "").upper() == "GZIP"
-
-    resp = httpx.get(doc_url, verify=certifi.where(), timeout=60)
+    resp    = httpx.get(payload["url"], verify=certifi.where(), timeout=60)
     resp.raise_for_status()
 
     raw_bytes = resp.content
@@ -95,19 +90,37 @@ def fetch_sales_report(date: datetime.date) -> pd.DataFrame:
         raw_bytes = gzip.decompress(raw_bytes)
 
     raw_json = json.loads(raw_bytes.decode("utf-8"))
-
     rows = []
     for entry in raw_json.get("salesAndTrafficByAsin", []):
         asin  = entry.get("childAsin") or entry.get("parentAsin", "UNKNOWN")
         sales = entry.get("salesByAsin", {})
         rows.append({
-            "asin":   asin,
-            "units":  sales.get("unitsOrdered", 0),
+            "asin":    asin,
+            "units":   sales.get("unitsOrdered", 0),
             "revenue": sales.get("orderedProductSales", {}).get("amount", 0.0),
         })
+    return rows
 
+
+def fetch_sales_report(date: datetime.date) -> pd.DataFrame:
+    """Request and download a single-day Sales & Traffic report."""
+    rows = _request_report(date, date)
     df = pd.DataFrame(rows)
     df["date"] = date.isoformat()
+    return df
+
+
+def fetch_sales_report_range(start: datetime.date, end: datetime.date) -> pd.DataFrame:
+    """Fetch SP-API aggregate totals for a date range. Stored with date=start.
+
+    SP-API aggregates the full range into one entry per ASIN. Storing with
+    date=start lets _asin_totals() correctly include these rows when summing
+    long windows (e.g. YoY) as long as start falls within the query window.
+    """
+    rows = _request_report(start, end)
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df["date"] = start.isoformat()
     return df
 
 
