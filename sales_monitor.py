@@ -146,6 +146,10 @@ def _asin_totals(df: pd.DataFrame, start: datetime.date, end: datetime.date) -> 
     mask = (df["date"] >= start.isoformat()) & (df["date"] <= end.isoformat())
     return df[mask].groupby("asin")["units"].sum()
 
+def _asin_revenue(df: pd.DataFrame, start: datetime.date, end: datetime.date) -> pd.Series:
+    mask = (df["date"] >= start.isoformat()) & (df["date"] <= end.isoformat())
+    return df[mask].groupby("asin")["revenue"].sum()
+
 
 def detect_changes(history: pd.DataFrame) -> list[dict]:
     # Use the most recent date we actually have data for as the reference point.
@@ -207,19 +211,23 @@ def _build_email(history: pd.DataFrame, alerts: list[dict]) -> str:
     # Daily summary — all products (always show every named ASIN, even if 0 sales)
     today_totals    = _asin_totals(history, ref_date, ref_date)
     yday_totals     = _asin_totals(history, prev_date, prev_date)
+    today_revenue   = _asin_revenue(history, ref_date, ref_date)
+    yday_revenue    = _asin_revenue(history, prev_date, prev_date)
     history_asins   = set(today_totals.index) | set(yday_totals.index)
     all_asins       = sorted(set(config.ASIN_NAMES.keys()) | history_asins)
 
     summary_rows = ""
     for asin in all_asins:
-        cur  = int(today_totals.get(asin, 0))
-        prev = int(yday_totals.get(asin, 0))
-        # Skip rows where both values are zero
-        if cur == 0 and prev == 0:
+        cur_units  = int(today_totals.get(asin, 0))
+        prev_units = int(yday_totals.get(asin, 0))
+        cur_rev    = today_revenue.get(asin, 0.0)
+        prev_rev   = yday_revenue.get(asin, 0.0)
+        # Skip rows where both unit values are zero
+        if cur_units == 0 and prev_units == 0:
             continue
         name = config.ASIN_NAMES.get(asin, asin)
-        if prev > 0:
-            pct = (cur - prev) / prev
+        if prev_units > 0:
+            pct = (cur_units - prev_units) / prev_units
             if abs(pct) >= config.SALES_THRESHOLD:
                 arrow = "▼" if pct < 0 else "▲"
                 col   = "#c0392b" if pct < 0 else "#27ae60"
@@ -232,8 +240,8 @@ def _build_email(history: pd.DataFrame, alerts: list[dict]) -> str:
             f"<tr>"
             f"<td style='padding:5px 10px;border-bottom:1px solid #eee;font-size:12px;color:#555'>{name}</td>"
             f"<td style='padding:5px 10px;border-bottom:1px solid #eee;font-size:11px;color:#888'>{asin}</td>"
-            f"<td style='padding:5px 10px;border-bottom:1px solid #eee;text-align:right'>{prev}</td>"
-            f"<td style='padding:5px 10px;border-bottom:1px solid #eee;text-align:right'>{cur}</td>"
+            f"<td style='padding:5px 10px;border-bottom:1px solid #eee;text-align:right'>{prev_units}<br><span style='color:#888;font-size:11px'>${prev_rev:,.2f}</span></td>"
+            f"<td style='padding:5px 10px;border-bottom:1px solid #eee;text-align:right'>{cur_units}<br><span style='color:#888;font-size:11px'>${cur_rev:,.2f}</span></td>"
             f"<td style='padding:5px 10px;border-bottom:1px solid #eee;text-align:right'>{chg}</td>"
             f"</tr>"
         )
@@ -286,8 +294,8 @@ def _build_email(history: pd.DataFrame, alerts: list[dict]) -> str:
         <tr style='background:#f0f0f0'>
           <th style='padding:7px 10px;text-align:left;font-size:12px'>Product</th>
           <th style='padding:7px 10px;text-align:left;font-size:12px'>ASIN</th>
-          <th style='padding:7px 10px;text-align:right;font-size:12px'>Yesterday</th>
-          <th style='padding:7px 10px;text-align:right;font-size:12px'>Today</th>
+          <th style='padding:7px 10px;text-align:right;font-size:12px'>Yesterday<br><span style='font-weight:normal;color:#888'>units / $</span></th>
+          <th style='padding:7px 10px;text-align:right;font-size:12px'>Today<br><span style='font-weight:normal;color:#888'>units / $</span></th>
           <th style='padding:7px 10px;text-align:right;font-size:12px'>Change</th>
         </tr>
       </thead>
