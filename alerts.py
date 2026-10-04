@@ -17,7 +17,7 @@ import requests
 # missing variable degrades to the right people rather than a stale list.
 FALLBACK_RECIPIENTS = (
     "lou@usplushealth.com,lloyd@usplushealth.com,stella@usplushealth.com,"
-    "max@usplushealth.com,carrie@usplushealth.com,mitchie@usplushealth.com,"
+    "max@usplushealth.com,mitchie@usplushealth.com,"
     "julian@usplushealth.com,hedda@usplushealth.com"
 )
 

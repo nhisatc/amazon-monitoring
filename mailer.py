@@ -6,7 +6,6 @@ from config import GMAIL_ADDRESS, GMAIL_APP_PASSWORD
 
 def send_alert(subject: str, body_html: str, recipients: list[str] = None):
     recipients = recipients or [
-        "carrie@usplushealth.com",
         "max@usplushealth.com",
         "julian@usplushealth.com",
         "hedda@usplushealth.com",
