@@ -44,6 +44,7 @@ ASIN_NAMES = {
     "B0DSCKXPQH": "Organic Jojoba Oil 16oz",
     "B0981HX877": "Mineral Oil",
     "B0981HG4PR": "Mineral Oil 4oz",
+    "B09B8VN1J9": "Mineral Oil 4oz Spray",
     "B09CYSYV8G": "Mineral Oil 1 Gal",
     "B0H6Q4X919": "Organic Castor Oil & Jojoba Oil Bundle 16oz",
     "B0H6XVVWYQ": "Vegetable Glycerin & Castor Oil Bundle 1 Gal",

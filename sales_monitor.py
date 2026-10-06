@@ -379,7 +379,7 @@ def run():
     history = load_history()
     new_data = False
 
-    for days_ago in range(1, 4):  # try 1, 2, 3 days ago
+    for days_ago in range(1, 6):  # try 1–5 days ago (covers SP-API delay + missed runs)
         target = datetime.date.today() - datetime.timedelta(days=days_ago)
         if target.isoformat() in history["date"].values:
             continue
