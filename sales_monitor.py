@@ -317,6 +317,11 @@ def _build_email(history: pd.DataFrame, alerts: list[dict]) -> str:
 
     earliest_date = datetime.date.fromisoformat(available_dates[0])
 
+    wow_section = _period_section(
+        "Weekly (WoW)",
+        ref_date - datetime.timedelta(days=6), ref_date,
+        ref_date - datetime.timedelta(days=13), ref_date - datetime.timedelta(days=7),
+    )
     mom_section = _period_section(
         "Monthly (MoM)",
         ref_date - datetime.timedelta(days=29), ref_date,
@@ -360,6 +365,7 @@ def _build_email(history: pd.DataFrame, alerts: list[dict]) -> str:
       </thead>
       <tbody>{summary_rows}</tbody>
     </table>
+    {wow_section}
     {mom_section}
     {yoy_section}
     <p style='color:#aaa;font-size:11px;margin-top:24px'>
