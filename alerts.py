@@ -28,7 +28,10 @@ FALLBACK_RECIPIENTS = (
 
 def _recipients() -> list[str]:
     raw = os.environ.get("ALERT_RECIPIENTS") or FALLBACK_RECIPIENTS
-    return [r.strip() for r in raw.split(",") if r.strip()]
+    # Carrie is no longer an alert recipient. Filter even if the GitHub
+    # ALERT_RECIPIENTS secret has not yet been updated.
+    return [r.strip() for r in raw.split(",")
+            if r.strip() and r.strip().lower() != "carrie@usplushealth.com"]
 
 
 def _sender() -> tuple[str, str, str]:
