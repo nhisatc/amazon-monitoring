@@ -73,7 +73,16 @@ THEMES = {
         "patterns": r"\b(float\w*|brown (spec|fleck|flake|gunk|stuff|particle)\w*|"
                     r"specks?|flakes?|gunk|sediment|particles?|residue|mold\w*|"
                     r"mould\w*|chunk\w*|debris|cloudy|murky|contaminat\w*|"
-                    r"sewage|slime|film|growth|black spot\w*|dirty)\b",
+                    r"sewage|slimy (?:residue|film|coating)|slime (?:in|inside|growing in|"
+                    r"floating in) (?:the |my |a )?(?:bottle|container|product)|"
+                    r"film|growth|black spot\w*|dirty)\b",
+    },
+    "documentation": {
+        "label": "SDS / COA / Compliance document request",
+        "patterns": r"\b(SDS|COA|safety data sheet|certificates? of analysis|"
+                    r"product specifications?(?: sheet)?|"
+                    r"compliance (?:records?|certificates?|documents?)|"
+                    r"(?:lab|test) reports?)\b",
     },
     "expiry": {
         "label": "Expired / date issue",
@@ -366,7 +375,7 @@ def voc_from_messages(days: int) -> tuple[list[dict], bool]:
 # same words never spawn two incidents.
 THEME_PRIORITY = ("safety", "contamination", "expiry", "odor", "leak",
                   "not_as_described", "efficacy", "consistency",
-                  "unspecified_defect")
+                  "unspecified_defect", "documentation")
 
 
 def primary_theme(themes: set[str]) -> str | None:
@@ -391,7 +400,9 @@ def build_incidents(items: list[dict]) -> list[dict]:
         # being "not comfortable" surfaced as both an odour issue and a
         # contamination issue, doubling the apparent problem count.
         theme = primary_theme(item["themes"])
-        if not theme:
+        if not theme or theme == "documentation":
+            # Buyer-message support handles document requests; they are not
+            # defects and must never generate product-quality alerts.
             continue
         buckets[(item["product"] or item["asin"] or "unknown", theme)].append(item)
 
@@ -774,6 +785,13 @@ def run(days: int = LOOKBACK_DAYS, report_only: bool = False, digest: bool = Fal
         kept.append(item)
     if suppressed:
         print(f"  {suppressed} castor-oil odour mention(s) suppressed.")
+
+    documentation_only = sum(
+        primary_theme(item["themes"]) == "documentation" for item in kept
+    )
+    if documentation_only:
+        print(f"  {documentation_only} documentation request(s) excluded "
+              "from product-quality incident counts.")
 
     all_incidents = build_incidents(kept)
 
