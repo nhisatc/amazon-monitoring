@@ -15,6 +15,9 @@ def send_alert(subject: str, body_html: str, recipients: list[str] = None):
         "rea@usplushealth.com",
         "stella@usplushealth.com",
     ]
+    # Apply the same recipient exclusion to sales and legacy mail alerts.
+    recipients = [r for r in recipients
+                  if r.strip().lower() != "carrie@usplushealth.com"]
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"]    = GMAIL_ADDRESS
