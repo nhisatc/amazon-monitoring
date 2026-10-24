@@ -19,7 +19,8 @@ MARKETPLACE_ID = os.environ.get("MARKETPLACE_ID", "ATVPDKIKX0DER")
 
 GMAIL_ADDRESS      = os.environ["GMAIL_ADDRESS"]
 GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
-ALERT_RECIPIENTS   = [r.strip() for r in os.environ["ALERT_RECIPIENTS"].split(",")]
+ALERT_RECIPIENTS   = [r.strip() for r in os.environ["ALERT_RECIPIENTS"].split(",")
+                      if r.strip() and r.strip().lower() != "carrie@usplushealth.com"]
 
 JUNGLE_SCOUT_API_KEY_NAME = os.environ["JUNGLE_SCOUT_API_KEY_NAME"]
 JUNGLE_SCOUT_API_KEY      = os.environ["JUNGLE_SCOUT_API_KEY"]
