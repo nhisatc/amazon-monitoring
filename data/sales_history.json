@@ -1,83 +1,5 @@
 [
   {
-    "date": "2024-10-31",
-    "asin": "B08Y7X8375",
-    "units": 1623,
-    "revenue": 16080.3
-  },
-  {
-    "date": "2024-10-31",
-    "asin": "B08Y83DNZ5",
-    "units": 3360,
-    "revenue": 66987.29
-  },
-  {
-    "date": "2024-10-31",
-    "asin": "B097HP7DQ6",
-    "units": 3748,
-    "revenue": 122954.82
-  },
-  {
-    "date": "2024-10-31",
-    "asin": "B097LTHS4S",
-    "units": 1458,
-    "revenue": 17448.44
-  },
-  {
-    "date": "2024-10-31",
-    "asin": "B0981HX5NG",
-    "units": 2284,
-    "revenue": 15902.73
-  },
-  {
-    "date": "2024-10-31",
-    "asin": "B09B8VN1J9",
-    "units": 2,
-    "revenue": 9.98
-  },
-  {
-    "date": "2024-10-31",
-    "asin": "B09CV925V4",
-    "units": 1337,
-    "revenue": 9286.19
-  },
-  {
-    "date": "2024-10-31",
-    "asin": "B09DZ2P2WJ",
-    "units": 71,
-    "revenue": 3048.42
-  },
-  {
-    "date": "2024-10-31",
-    "asin": "B09DZ46197",
-    "units": 422,
-    "revenue": 2466.8
-  },
-  {
-    "date": "2024-10-31",
-    "asin": "B0BJH3RD1F",
-    "units": 1667,
-    "revenue": 19964.99
-  },
-  {
-    "date": "2024-10-31",
-    "asin": "B0BR99MF15",
-    "units": 2263,
-    "revenue": 56224.73
-  },
-  {
-    "date": "2024-10-31",
-    "asin": "B0CCMHLX72",
-    "units": 715,
-    "revenue": 7101.03
-  },
-  {
-    "date": "2024-10-31",
-    "asin": "B0DDWQ1515",
-    "units": 540,
-    "revenue": 6719.5
-  },
-  {
     "date": "2024-11-30",
     "asin": "B08Y7X8375",
     "units": 1321,
@@ -15280,5 +15202,101 @@
     "asin": "B09CV925V4",
     "units": 11,
     "revenue": 76.89
+  },
+  {
+    "date": "2026-10-30",
+    "asin": "B08Y7X8375",
+    "units": 35,
+    "revenue": 339.66
+  },
+  {
+    "date": "2026-10-30",
+    "asin": "B08Y83DNZ5",
+    "units": 26,
+    "revenue": 649.74
+  },
+  {
+    "date": "2026-10-30",
+    "asin": "B097LTHS4S",
+    "units": 162,
+    "revenue": 2509.79
+  },
+  {
+    "date": "2026-10-30",
+    "asin": "B0BJH3RD1F",
+    "units": 24,
+    "revenue": 335.26
+  },
+  {
+    "date": "2026-10-30",
+    "asin": "B0BR99MF15",
+    "units": 225,
+    "revenue": 7902.24
+  },
+  {
+    "date": "2026-10-30",
+    "asin": "B0DDWQ1515",
+    "units": 91,
+    "revenue": 909.09
+  },
+  {
+    "date": "2026-10-30",
+    "asin": "B0DSCKXPQH",
+    "units": 7,
+    "revenue": 139.93
+  },
+  {
+    "date": "2026-10-30",
+    "asin": "B09CV925V4",
+    "units": 10,
+    "revenue": 69.9
+  },
+  {
+    "date": "2026-10-30",
+    "asin": "B097HP7DQ6",
+    "units": 96,
+    "revenue": 3336.29
+  },
+  {
+    "date": "2026-10-30",
+    "asin": "B0H6Q4X919",
+    "units": 0,
+    "revenue": 0.0
+  },
+  {
+    "date": "2026-10-30",
+    "asin": "B0H9K3HBPT",
+    "units": 0,
+    "revenue": 0.0
+  },
+  {
+    "date": "2026-10-30",
+    "asin": "B0H9JQ55ND",
+    "units": 0,
+    "revenue": 0.0
+  },
+  {
+    "date": "2026-10-30",
+    "asin": "B0H9K5QMKJ",
+    "units": 0,
+    "revenue": 0.0
+  },
+  {
+    "date": "2026-10-30",
+    "asin": "B0H9KFM5H5",
+    "units": 0,
+    "revenue": 0.0
+  },
+  {
+    "date": "2026-10-30",
+    "asin": "B0H9JT2TMP",
+    "units": 0,
+    "revenue": 0.0
+  },
+  {
+    "date": "2026-10-30",
+    "asin": "B0H9JSHPW1",
+    "units": 0,
+    "revenue": 0.0
   }
 ]
