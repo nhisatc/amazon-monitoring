@@ -32,9 +32,9 @@ def run_backfill():
 
     print(f"Existing history starts : {earliest}")
     print(f"Two years ago           : {two_years_ago}")
-    print(f"Gap to fill             : {two_years_ago} → {earliest - datetime.timedelta(days=1)}")
+    print(f"Gap to fill             : {two_years_ago} to {earliest - datetime.timedelta(days=1)}")
 
-    # Generate 30-day chunks from oldest → newest
+    # Generate 30-day chunks from oldest to newest
     chunks = []
     cur = two_years_ago
     while cur < earliest:
@@ -46,37 +46,41 @@ def run_backfill():
     print(f"\nTotal chunks: {len(chunks)}")
     print(f"Estimated time: ~{len(chunks)} minutes\n")
 
-    new_rows = []
+    total_saved = 0
     for i, (start, end) in enumerate(chunks, 1):
+        # Reload history each iteration so skips stay accurate after saves
+        history = sales_monitor.load_history()
+        existing_dates = set(history["date"].values)
+
         if start.isoformat() in existing_dates:
             print(f"[{i:2}/{len(chunks)}] {start} already in history, skipping.")
             continue
 
-        print(f"[{i:2}/{len(chunks)}] Fetching {start} → {end} ...", end=" ", flush=True)
+        print(f"[{i:2}/{len(chunks)}] Fetching {start} to {end} ...", end=" ", flush=True)
         try:
             df = sales_monitor.fetch_sales_report_range(start, end)
             if df.empty:
                 print("no data returned.")
             else:
-                new_rows.append(df)
-                print(f"OK — {len(df)} rows.")
+                combined = pd.concat([history, df], ignore_index=True)
+                combined = (combined
+                            .sort_values(["date", "asin"])
+                            .drop_duplicates(["date", "asin"], keep="last")
+                            .reset_index(drop=True))
+                sales_monitor.save_history(combined)
+                total_saved += len(df)
+                print(f"OK — {len(df)} rows saved.")
         except Exception as exc:
             print(f"ERROR: {exc}")
 
         if i < len(chunks):
-            print(f"         waiting 65 s for rate limit…", end="\r", flush=True)
+            print(f"         waiting 65 s for rate limit...", end="\r", flush=True)
             time.sleep(65)
 
-    if new_rows:
-        combined = pd.concat([history] + new_rows, ignore_index=True)
-        combined = (combined
-                    .sort_values(["date", "asin"])
-                    .drop_duplicates(["date", "asin"], keep="last")
-                    .reset_index(drop=True))
-        sales_monitor.save_history(combined)
-        total = sum(len(r) for r in new_rows)
-        print(f"\n✓ Saved {total} new rows.")
-        print(f"  History now spans {combined['date'].min()} → {combined['date'].max()}")
+    if total_saved:
+        history = sales_monitor.load_history()
+        print(f"\nDone. Saved {total_saved} new rows total.")
+        print(f"  History now spans {history['date'].min()} to {history['date'].max()}")
     else:
         print("\nNothing new to save.")
 
