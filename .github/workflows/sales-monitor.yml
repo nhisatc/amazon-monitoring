@@ -45,5 +45,25 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add data/
-          git commit -m "Auto: Sales monitor data updated" || echo "No changes to commit"
-          git push
+          if git diff --staged --quiet; then
+            echo "No sales changes to commit"
+            exit 0
+          fi
+          git commit -m "Auto: Sales monitor data updated"
+          # Handle another monitor or repository edit updating main during report generation.
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "Sales data commit conflicts with main; review required" >&2
+              exit 1
+            fi
+            if git push origin HEAD:main; then
+              echo "Sales data pushed successfully"
+              exit 0
+            fi
+            echo "Push race on attempt $attempt; retrying"
+            sleep 5
+          done
+          echo "Unable to push sales data after 3 attempts" >&2
+          exit 1
